@@ -13,6 +13,7 @@
     record: null,
     tab: "transcript",
     auto: true,
+    view: "detail", // "detail" | "compose"
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -80,10 +81,11 @@
     const record = await fetchJson(`${API}/inferences/${id}`);
     if (state.selectedId !== id) return;
     state.record = record;
-    renderDetail();
+    if (state.view === "detail") renderDetail();
   };
 
   const select = async (id) => {
+    state.view = "detail";
     state.selectedId = id;
     state.record = null;
     renderList();
@@ -308,6 +310,248 @@
     ]);
   };
 
+
+  /* ---------- compose: send a message to the agent ---------- */
+
+  const DRAFT_KEY = "agent-runtime.compose";
+  const DEFAULT_FORMAT = {
+    type: "object",
+    required: ["summary", "sentiment"],
+    properties: {
+      summary: { type: "string", description: "Краткое содержание, 2-3 предложения" },
+      sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"], description: "Общее настроение" },
+      assets: { type: "array", items: { type: "string" }, description: "Упомянутые тикеры" },
+    },
+  };
+  const newMessage = (role = "user") => ({ role, content: "", images: [] });
+  const compose = {
+    mode: "object",
+    model: "",
+    instructions: "",
+    format: JSON.stringify(DEFAULT_FORMAT, null, 2),
+    messages: [newMessage()],
+    files: [],
+    busy: false,
+    status: "",
+    result: null,
+  };
+  try {
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    if (draft && typeof draft === "object") {
+      compose.mode = draft.mode === "text" ? "text" : "object";
+      compose.model = draft.model || "";
+      compose.instructions = draft.instructions || "";
+      compose.format = typeof draft.format === "string" ? draft.format : compose.format;
+      if (Array.isArray(draft.messages) && draft.messages.length) {
+        compose.messages = draft.messages.map((m) => ({ role: m.role || "user", content: m.content || "", images: [] }));
+      }
+    }
+  } catch { /* ignore broken drafts */ }
+  const saveDraft = () => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        mode: compose.mode,
+        model: compose.model,
+        instructions: compose.instructions,
+        format: compose.format,
+        messages: compose.messages.map(({ role, content }) => ({ role, content })),
+      }));
+    } catch { /* storage unavailable */ }
+  };
+
+  const readAsDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+  const openCompose = () => {
+    state.view = "compose";
+    state.selectedId = null;
+    state.record = null;
+    renderList();
+    renderCompose();
+  };
+
+  const renderCompose = () => {
+    if (state.view !== "compose") return;
+    const detail = $("#detail");
+    const form = el("div", { class: "compose" });
+
+    form.append(
+      el("div", { class: "detail-head" }, [
+        el("h2", {}, "New inference"),
+        el("div", { class: "segmented" }, ["object", "text"].map((mode) =>
+          el("button", { class: compose.mode === mode ? "active" : "", onclick: () => { compose.mode = mode; saveDraft(); renderCompose(); } },
+            mode === "object" ? "object (provide_answer)" : "text"),
+        )),
+      ]),
+    );
+
+    // messages
+    const messages = el("div", { class: "field" }, el("label", {}, "messages"));
+    compose.messages.forEach((message, index) => {
+      const card = el("div", { class: "message-card" });
+      const roleSelect = el("select", { onchange: (e) => { message.role = e.target.value; saveDraft(); } },
+        ["user", "assistant", "system"].map((role) => el("option", { value: role, ...(message.role === role ? { selected: "selected" } : {}) }, role)));
+      const imageInput = el("input", { type: "file", accept: "image/*", multiple: "multiple", style: "display:none", onchange: async (e) => {
+        for (const file of Array.from(e.target.files)) {
+          message.images.push({ name: file.name, dataUrl: await readAsDataUrl(file) });
+        }
+        renderCompose();
+      } });
+      card.append(...[
+        el("div", { class: "head" }, [
+          roleSelect,
+          el("span", { class: "muted" }, `#${index}`),
+          el("span", { class: "spacer" }),
+          el("button", { class: "ghost", onclick: () => imageInput.click() }, "+ image"),
+          compose.messages.length > 1 ? el("button", { class: "ghost", onclick: () => { compose.messages.splice(index, 1); saveDraft(); renderCompose(); } }, "remove") : null,
+          imageInput,
+        ]),
+        el("textarea", { placeholder: "message text", oninput: (e) => { message.content = e.target.value; saveDraft(); } }, message.content),
+        message.images.length
+          ? el("div", { class: "attach-list" }, message.images.map((img, i) =>
+              el("span", { class: "chip" }, [
+                el("img", { src: img.dataUrl, alt: img.name }),
+                el("span", {}, img.name),
+                el("button", { title: "remove", onclick: () => { message.images.splice(i, 1); renderCompose(); } }, "×"),
+              ])))
+          : null,
+      ].filter(Boolean));
+      messages.append(card);
+    });
+    messages.append(el("div", {}, el("button", { class: "ghost", onclick: () => { compose.messages.push(newMessage()); saveDraft(); renderCompose(); } }, "+ message")));
+    form.append(messages);
+
+    // files
+    const fileInput = el("input", { type: "file", multiple: "multiple", style: "display:none", onchange: async (e) => {
+      for (const file of Array.from(e.target.files)) {
+        compose.files.push({ name: file.name, size: file.size, dataUrl: await readAsDataUrl(file) });
+      }
+      renderCompose();
+    } });
+    form.append(
+      el("div", { class: "field" }, [
+        el("label", {}, "files (written into the agent workspace)"),
+        el("div", { class: "attach-list" }, [
+          ...compose.files.map((file, i) => el("span", { class: "chip" }, [
+            el("span", {}, `${file.name} · ${fmtBytes(file.size)}`),
+            el("button", { title: "remove", onclick: () => { compose.files.splice(i, 1); renderCompose(); } }, "×"),
+          ])),
+          el("button", { class: "ghost", onclick: () => fileInput.click() }, "+ file"),
+          fileInput,
+        ]),
+      ]),
+    );
+
+    // format (object mode only)
+    if (compose.mode === "object") {
+      form.append(
+        el("div", { class: "field" }, [
+          el("label", {}, "format (JSON schema, json-inference FormatModel)"),
+          el("textarea", { class: "code", spellcheck: "false", oninput: (e) => { compose.format = e.target.value; saveDraft(); } }, compose.format),
+          el("div", { class: "hint" }, "Becomes the parameters of the provide_answer tool. The answer is validated against it."),
+        ]),
+      );
+    }
+
+    // model + instructions
+    form.append(
+      el("div", { class: "row" }, [
+        el("div", { class: "field" }, [
+          el("label", {}, "model (optional)"),
+          el("input", { type: "text", placeholder: "default from OLLAMA_MODEL", value: compose.model, oninput: (e) => { compose.model = e.target.value; saveDraft(); } }),
+        ]),
+        el("div", { class: "field" }, [
+          el("label", {}, "instructions (optional, appended to the system prompt)"),
+          el("textarea", { style: "min-height:42px", oninput: (e) => { compose.instructions = e.target.value; saveDraft(); } }, compose.instructions),
+        ]),
+      ]),
+    );
+
+    // actions
+    form.append(
+      el("div", { class: "compose-actions" }, [
+        el("button", { class: "primary", ...(compose.busy ? { disabled: "disabled" } : {}), onclick: submitCompose }, compose.busy ? "running…" : `send to /api/v1/${compose.mode === "object" ? "inference" : "text"}`),
+        el("button", { class: "ghost", ...(compose.busy ? { disabled: "disabled" } : {}), onclick: () => { compose.messages = [newMessage()]; compose.files = []; compose.result = null; compose.status = ""; saveDraft(); renderCompose(); } }, "clear"),
+        el("span", { class: "compose-status" }, compose.status),
+      ]),
+    );
+
+    // result
+    if (compose.result) {
+      const r = compose.result;
+      const box = el("div", { class: `compose-result${r.status === "error" ? " error" : ""}` });
+      box.append(el("div", {}, [
+        el("span", { class: `badge ${r.status === "success" ? "success" : "error"}` }, r.status),
+        " ",
+        el("span", { class: "muted" }, `${r.model ?? ""} · ${r.attempts ?? "?"} attempts · ${r.turns ?? "?"} turns · ${fmtDuration(r.durationMs)}`),
+        " ",
+        r.id ? el("a", { href: `?id=${r.id}`, onclick: (e) => { e.preventDefault(); select(r.id); } }, "open transcript") : null,
+      ]));
+      if (r.status === "success" && "text" in r) box.append(el("div", { class: "text" }, r.text));
+      else if (r.status === "success") box.append(json(r.data));
+      else if (r.error) box.append(el("div", { class: "error-box" }, [
+        el("div", {}, [el("strong", {}, r.error.code || "error"), " — ", r.error.message || ""]),
+        r.error.details?.length ? el("ol", {}, r.error.details.map((d) => el("li", {}, d))) : null,
+      ]));
+      else box.append(json(r));
+      form.append(box);
+    }
+
+    detail.replaceChildren(form);
+  };
+
+  const submitCompose = async () => {
+    if (compose.busy) return;
+    const messages = compose.messages
+      .map(({ role, content, images }) => ({ role, content, ...(images.length ? { images: images.map((img) => img.dataUrl) } : {}) }))
+      .filter((m) => m.content.trim() || m.images?.length);
+    if (!messages.length) {
+      compose.status = "add at least one message";
+      renderCompose();
+      return;
+    }
+    const body = { messages };
+    if (compose.files.length) body.files = compose.files.map(({ name, dataUrl }) => ({ name, content: dataUrl }));
+    if (compose.model.trim()) body.model = compose.model.trim();
+    if (compose.instructions.trim()) body.instructions = compose.instructions.trim();
+    if (compose.mode === "object") {
+      try {
+        body.format = JSON.parse(compose.format);
+      } catch (error) {
+        compose.status = `format is not valid JSON: ${error.message}`;
+        renderCompose();
+        return;
+      }
+    }
+    compose.busy = true;
+    compose.result = null;
+    compose.status = "sending… the record appears in the list on the left as soon as the server accepts it";
+    renderCompose();
+    const started = Date.now();
+    try {
+      const response = await fetch(`${API}/${compose.mode === "object" ? "inference" : "text"}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      compose.result = payload;
+      compose.status = `HTTP ${response.status} in ${fmtDuration(Date.now() - started)}`;
+    } catch (error) {
+      compose.result = { status: "error", error: { code: "network", message: error.message, details: [] } };
+      compose.status = "request failed";
+    } finally {
+      compose.busy = false;
+      renderCompose();
+      loadList().catch(console.error);
+    }
+  };
+
   /* ---------- wiring ---------- */
 
   $("#statusFilter").addEventListener("change", (event) => {
@@ -319,6 +563,7 @@
     loadList().catch(console.error);
   });
   $("#reload").addEventListener("click", () => loadList().catch(console.error));
+  $("#newInference").addEventListener("click", openCompose);
   $("#more").addEventListener("click", () => loadList(false).catch(console.error));
   $("#autoRefresh").addEventListener("change", (event) => {
     state.auto = event.target.checked;
@@ -338,4 +583,5 @@
 
   const initial = new URLSearchParams(location.search).get("id");
   if (initial) select(initial);
+  else if (new URLSearchParams(location.search).has("new")) openCompose();
 })();
