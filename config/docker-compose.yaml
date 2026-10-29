@@ -15,6 +15,8 @@
 services:
   agent-runtime:
     image: tripolskypetr/agent-runtime:latest
+    # the image is published for linux/amd64 only; this lets `docker compose pull` work on arm64 hosts (Apple Silicon) via emulation
+    platform: linux/amd64
     container_name: agent-runtime
     ports:
       - "10050:10050"
@@ -26,6 +28,8 @@ services:
       - DATA_DIR=/app/data
       - DB_PATH=/app/storage/agent-runtime.sqlite
       - LOGS_DIR=/app/logs
+      # everything from ./logs/debug.log is also printed to stdout, so `docker compose logs -f agent-runtime` shows it
+      - LOG_CONSOLE=all
     volumes:
       # SQLite database with the history of inferences, transcripts and files
       - ./storage:/app/storage

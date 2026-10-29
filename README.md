@@ -154,7 +154,7 @@ All settings are environment variables (see [config/.env.example](config/.env.ex
 | `SYSTEM_PROMPT_PATH` | `./assets/system.mustache` | System prompt template for `/inference` (re-read when changed) |
 | `SYSTEM_PROMPT_TEXT_PATH` | `./assets/system-text.mustache` | System prompt template for `/text` |
 | `LOGS_DIR` / `LOG_FILE` | `./logs` / `debug.log` | Debug log location (see [Logging](#logging)) |
-| `LOG_CONSOLE` | `warn` | Echo of the debug log to stdout: `all`, `warn`, `off` |
+| `LOG_CONSOLE` | `all` | Echo of the debug log to stdout (`docker compose logs`): `all`, `warn`, `off` |
 
 The system prompts are Mustache templates in [assets/system.mustache](assets/system.mustache) and [assets/system-text.mustache](assets/system-text.mustache); they receive the workspace path, file and image lists, the schema (object mode) and the extra instructions.
 
@@ -177,7 +177,7 @@ What is logged, by scope:
 | `inference:<id>:bash` / `view_image` / `provide_answer` | command, exit code, duration, output preview, timeouts and kills; image path and size; validation failures and the accepted answer |
 | `workspace`, `queue`, `db`, `systemPrompt`, `admin` | workspace resets and writes, queue waits, every database write, template reloads, admin API calls |
 
-Secrets (`apiKey`, `authorization`, …) are masked, strings longer than 2000 characters (base64 images, prompts) are truncated, errors are stored with name, message and stack. Related settings: `LOGS_ENABLED`, `LOGS_DIR`, `LOG_FILE`, `LOG_CONSOLE` (`all` echoes everything to stdout, `warn` only warnings and errors, `off` nothing), `LOG_LEVEL` (Fastify's own request log on stdout).
+Secrets (`apiKey`, `authorization`, …) are masked, strings longer than 2000 characters (base64 images, prompts) are truncated, errors are stored with name, message and stack. The same records go to stdout (`docker compose logs -f agent-runtime`) because `LOG_CONSOLE` defaults to `all`; set `warn` to keep only warnings and errors there, or `off`. Other settings: `LOGS_ENABLED`, `LOGS_DIR`, `LOG_FILE`, `LOG_LEVEL` (Fastify's own request log on stdout).
 
 To follow one inference: `grep '<inference id>' logs/debug.log | jq -c '.args'`.
 

@@ -54,11 +54,11 @@ export const CONFIG = {
   OUTPUT_FILE_MAX_BYTES: envInt("OUTPUT_FILE_MAX_BYTES", 20 * 1024 * 1024),
   OUTPUT_FILE_MAX_COUNT: envInt("OUTPUT_FILE_MAX_COUNT", 200),
 
-  /** Logging: ./logs/debug.log via pinolog; console echo of warn/error (LOG_CONSOLE=all|warn|off) */
+  /** Logging: ./logs/debug.log via pinolog; the same records echoed to stdout (LOG_CONSOLE=all|warn|off, default all so `docker logs` shows everything) */
   LOGS_ENABLED: envBool("LOGS_ENABLED", true),
   LOGS_DIR: path.resolve(root, env("LOGS_DIR", "./logs")),
   LOG_FILE: env("LOG_FILE", "debug.log"),
-  LOG_CONSOLE: (["all", "warn", "off"].includes(env("LOG_CONSOLE", "warn")) ? env("LOG_CONSOLE", "warn") : "warn") as "all" | "warn" | "off",
+  LOG_CONSOLE: (["all", "warn", "off"].includes(env("LOG_CONSOLE", "all")) ? env("LOG_CONSOLE", "all") : "all") as "all" | "warn" | "off",
   LOG_LEVEL: env("LOG_LEVEL", "info"),
 
   /** Storage */
