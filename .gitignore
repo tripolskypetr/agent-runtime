@@ -1,0 +1,9 @@
+node_modules
+build
+storage
+data
+.env
+.env.local
+*.log
+.DS_Store
+.playwright-mcp

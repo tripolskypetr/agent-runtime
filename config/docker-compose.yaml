@@ -1,0 +1,44 @@
+# agent-runtime on another machine: only Docker is required.
+#
+#   mkdir agent-runtime && cd agent-runtime
+#   curl -O https://raw.githubusercontent.com/tripolskypetr/agent-runtime/master/config/docker-compose.yaml
+#   curl -o .env https://raw.githubusercontent.com/tripolskypetr/agent-runtime/master/config/.env.example
+#   # put your key from https://ollama.com/settings/keys into .env (OLLAMA_API_KEY=...)
+#   docker compose up -d
+#
+#   Swagger:  http://localhost:8080/docs
+#   Admin UI: http://localhost:8080/admin
+#   curl -X POST http://localhost:8080/api/v1/inference -H 'content-type: application/json' -d @request.json
+#
+# Update to the latest image:  docker compose pull && docker compose up -d
+
+services:
+  agent-runtime:
+    image: tripolskypetr/agent-runtime:latest
+    container_name: agent-runtime
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # Everything below can be overridden in .env; these are the defaults baked into the image.
+      - PORT=8080
+      - DATA_DIR=/app/data
+      - DB_PATH=/app/storage/agent-runtime.sqlite
+    volumes:
+      # SQLite database with the history of inferences, transcripts and files
+      - ./storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # To use a local Ollama instead of ollama.com, run it on the host and set in .env:
+  #   OLLAMA_HOST=http://host.docker.internal:11434
+  #   OLLAMA_API_KEY=
+  # and uncomment:
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"

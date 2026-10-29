@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>agent-runtime admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath fill=%27%232f6fed%27 d=%27M8 1l7 7-7 7-7-7z%27/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <span>agent-runtime</span>
+      <span id="health" class="health" title="service health">…</span>
+    </div>
+    <nav class="links">
+      <label class="toggle"><input type="checkbox" id="autoRefresh" checked> auto refresh</label>
+      <a href="/docs" target="_blank" rel="noopener">Swagger</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <select id="statusFilter">
+          <option value="">all</option>
+          <option value="running">running</option>
+          <option value="success">success</option>
+          <option value="error">error</option>
+        </select>
+        <span id="listTotal" class="muted"></span>
+        <button id="reload" class="icon" title="reload">↻</button>
+      </div>
+      <ul id="list" class="list"></ul>
+      <div class="sidebar-foot">
+        <button id="more" class="ghost">load more</button>
+      </div>
+    </aside>
+
+    <section id="detail" class="detail">
+      <div class="empty">Select an inference on the left.</div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

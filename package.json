@@ -1,0 +1,35 @@
+{
+  "name": "agent-runtime",
+  "version": "0.1.0",
+  "description": "REST API harness for a pi-based AI agent: structured JSON answers, bash + image tools, isolated data workspace, SQLite history and admin UI",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file-if-exists=.env ./build/index.js",
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "publish:win": "npm run build && .\\scripts\\win\\publish.bat",
+    "publish:x": "npm run build && sh ./scripts/linux/publish.sh"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@fastify/static": "10.1.8",
+    "@fastify/swagger": "9.9.2",
+    "@fastify/swagger-ui": "6.1.2",
+    "fastify": "5.12.7",
+    "functools-kit": "5.0.0",
+    "mustache": "4.2.0",
+    "ollama": "^0.6.4"
+  },
+  "devDependencies": {
+    "@types/mustache": "4.2.6",
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

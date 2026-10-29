@@ -1,0 +1,10 @@
+src
+scripts
+config
+storage
+data
+node_modules
+.git
+.env
+*.md
+tsconfig.json
