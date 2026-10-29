@@ -1,7 +1,47 @@
 {
   "name": "agent-runtime",
   "version": "0.1.0",
-  "description": "REST API harness for a pi-based AI agent: structured JSON answers, bash + image tools, isolated data workspace, SQLite history and admin UI",
+  "description": "REST API harness for a pi-based AI agent on Ollama: structured JSON answers via provide_answer tool calling, plain text answers, bash and image tools in an isolated data workspace, SQLite history, admin UI and Swagger. Ships as a self-contained Docker image.",
+  "keywords": [
+    "ai-agent",
+    "agent-harness",
+    "llm",
+    "ollama",
+    "pi",
+    "pi-agent-core",
+    "tool-calling",
+    "function-calling",
+    "structured-output",
+    "json-schema",
+    "json-inference",
+    "generateObject",
+    "generateText",
+    "rest-api",
+    "fastify",
+    "swagger",
+    "openapi",
+    "sqlite",
+    "node-sqlite",
+    "docker",
+    "bash-tool",
+    "vision",
+    "multimodal",
+    "typescript"
+  ],
+  "author": {
+    "name": "Petr Tripolsky",
+    "email": "tripolskypetr@gmail.com",
+    "url": "https://github.com/tripolskypetr"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tripolskypetr/agent-runtime"
+  },
+  "homepage": "https://github.com/tripolskypetr/agent-runtime#readme",
+  "bugs": {
+    "url": "https://github.com/tripolskypetr/agent-runtime/issues"
+  },
   "type": "module",
   "private": true,
   "engines": {
