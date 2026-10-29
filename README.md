@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tripolskypetr/agent-runtime/master/assets/logo.png" height="115px" alt="garch" />
+  <img src="https://raw.githubusercontent.com/tripolskypetr/agent-runtime/master/public/logo.png" height="115px" alt="agent-runtime" />
 </p>
 
 <p align="center">
