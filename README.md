@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tripolskypetr/agent-runtime/main/assets/logo.png" height="115px" alt="garch" />
+  <img src="https://raw.githubusercontent.com/tripolskypetr/agent-runtime/master/assets/logo.png" height="115px" alt="garch" />
 </p>
 
 <p align="center">
@@ -11,6 +11,8 @@
 ## What it does
 
 `POST /api/v1/inference` takes a conversation (text and photos), a set of files and a JSON schema, runs an agent and returns an object that matches the schema. `POST /api/v1/text` does the same without a schema and returns the agent's final message as plain text (the `generateObject` / `generateText` pair of json-inference).
+
+![screenshot](https://raw.githubusercontent.com/tripolskypetr/agent-runtime/main/screenshots/screenshot1.png)
 
 The agent loop is [`@earendil-works/pi-agent-core`](https://github.com/earendil-works/pi/tree/main/packages/agent); inference goes through the [`ollama`](https://www.npmjs.com/package/ollama) SDK with native tool calling, exactly like `OllamaProvider` in [json-inference](https://github.com/tripolskypetr/json-inference). Every run has three tools:
 
