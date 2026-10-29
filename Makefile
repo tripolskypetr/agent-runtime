@@ -10,6 +10,6 @@ publish:
 start:
 	npm run build && npm start
 
-# Run the end-to-end smoke test against BASE_URL (default http://localhost:8080)
+# Run the end-to-end smoke test against BASE_URL (default http://localhost:10050)
 smoke:
 	npm run smoke

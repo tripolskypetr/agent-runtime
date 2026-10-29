@@ -26,7 +26,7 @@ COPY package-lock.json .
 RUN npm install --omit=dev --ignore-scripts --verbose
 
 ENV NODE_ENV=production \
-    PORT=8080 \
+    PORT=10050 \
     HOST=0.0.0.0 \
     DATA_DIR=/app/data \
     DB_PATH=/app/storage/agent-runtime.sqlite
@@ -35,9 +35,9 @@ RUN mkdir -p /app/data /app/storage
 
 VOLUME ["/app/storage"]
 
-EXPOSE 8080
+EXPOSE 10050
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD curl -f http://localhost:8080/api/v1/health || exit 1
+    CMD curl -f http://localhost:10050/api/v1/health || exit 1
 
 CMD ["node", "./build/index.js"]

@@ -1,13 +1,13 @@
 /**
  * End-to-end smoke test against a running agent-runtime.
- *   BASE_URL=http://localhost:8080 npm run smoke
+ *   BASE_URL=http://localhost:10050 npm run smoke
  *   SMOKE_JSONL=/path/to/wwwroot.jsonl npm run smoke   # also runs a real record with photos
  */
 import { deflateSync } from "zlib";
 import { createReadStream } from "fs";
 import readline from "readline";
 
-const BASE_URL = process.env.BASE_URL ?? "http://localhost:8080";
+const BASE_URL = process.env.BASE_URL ?? "http://localhost:10050";
 
 /* ---- minimal PNG encoder (RGB, no deps) ---- */
 const crcTable = new Uint32Array(256).map((_, n) => {

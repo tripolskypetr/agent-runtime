@@ -29,7 +29,7 @@ const root = process.cwd();
 
 export const CONFIG = {
   /** HTTP server */
-  PORT: envInt("PORT", 8080),
+  PORT: envInt("PORT", 10050),
   HOST: env("HOST", "0.0.0.0"),
   BODY_LIMIT_BYTES: envInt("BODY_LIMIT_MB", 256) * 1024 * 1024,
 

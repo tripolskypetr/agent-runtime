@@ -1,0 +1,76 @@
+{
+  "name": "agent-runtime-sdk",
+  "version": "0.1.0",
+  "description": "Strictly typed Node.js client for agent-runtime over the fetch API: generateObject() with return types inferred from the JSON schema, generateText(), and the admin API.",
+  "keywords": [
+    "agent-runtime",
+    "sdk",
+    "client",
+    "ai-agent",
+    "ollama",
+    "structured-output",
+    "json-schema",
+    "type-inference",
+    "generateObject",
+    "generateText",
+    "fetch",
+    "typescript"
+  ],
+  "author": {
+    "name": "Petr Tripolsky",
+    "email": "tripolskypetr@gmail.com",
+    "url": "https://github.com/tripolskypetr"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/tripolskypetr/agent-runtime/tree/master/packages/sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tripolskypetr/agent-runtime",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/tripolskypetr/agent-runtime/issues"
+  },
+  "files": [
+    "build",
+    "types.d.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "test": "npm run build && tsc -p test/tsconfig.json && node test/test.mjs"
+  },
+  "main": "build/index.cjs",
+  "module": "build/index.mjs",
+  "source": "src/index.ts",
+  "types": "./types.d.ts",
+  "exports": {
+    "require": "./build/index.cjs",
+    "types": "./types.d.ts",
+    "import": "./build/index.mjs",
+    "default": "./build/index.cjs"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "11.1.6",
+    "@types/node": "22.9.0",
+    "rollup": "3.29.5",
+    "rollup-plugin-dts": "6.1.1",
+    "rollup-plugin-peer-deps-external": "2.2.4",
+    "tslib": "2.7.0",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "undici": ">=6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "undici": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

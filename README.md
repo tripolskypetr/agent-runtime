@@ -40,9 +40,9 @@ curl -o .env https://raw.githubusercontent.com/tripolskypetr/agent-runtime/maste
 docker compose up -d
 ```
 
-- Swagger UI: http://localhost:8080/docs
-- Admin UI (no password): http://localhost:8080/admin
-- Health: http://localhost:8080/api/v1/health
+- Swagger UI: http://localhost:10050/docs
+- Admin UI (no password): http://localhost:10050/admin
+- Health: http://localhost:10050/api/v1/health
 
 The SQLite database lives in `./storage` next to the compose file.
 
@@ -114,6 +114,25 @@ If the model finishes without text it is asked again up to `MAX_ATTEMPTS` times,
 | `DELETE` | `/api/v1/inferences/:id` | Delete an inference |
 | `GET` | `/api/v1/health` | Model, host, queue state |
 
+## SDK
+
+[packages/sdk](packages/sdk) ships `agent-runtime-sdk`, a typed Node.js client over `fetch` with the json-inference `generateObject()` / `generateText()` pair. The answer type is inferred from the schema, so it has IntelliSense:
+
+```typescript
+import { generateObject } from "agent-runtime-sdk";
+
+const entry = await generateObject(
+  {
+    messages: [{ role: "user", content: "…" }],
+    format: { type: "object", required: ["position"], properties: { position: { type: "string", enum: ["long", "short", "wait"], description: "…" } } },
+  },
+  { baseUrl: "http://localhost:10050" }, // optional; defaults to AGENT_RUNTIME_URL or http://localhost:10050
+);
+entry.position; // "long" | "short" | "wait"
+```
+
+See the [SDK README](packages/sdk/README.md) for the full API, error handling and long-request setup.
+
 ## Configuration
 
 All settings are environment variables (see [config/.env.example](config/.env.example)).
@@ -145,7 +164,7 @@ Node 26+ (`node:sqlite` is built in, no native modules).
 npm install
 cp config/.env.example .env     # fill OLLAMA_API_KEY
 npm run dev                     # tsx watch
-npm run smoke                   # end-to-end test against BASE_URL (default http://localhost:8080)
+npm run smoke                   # end-to-end test against BASE_URL (default http://localhost:10050)
 SMOKE_JSONL=../backtest-news-claims/assets/wwwroot.jsonl npm run smoke   # also runs a real record with photos
 ```
 
