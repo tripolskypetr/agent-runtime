@@ -1,5 +1,8 @@
 import type { AttachmentKind, AttachmentMeta } from "../model/Inference.model.js";
+import { getLogger } from "../lib/logger.js";
 import { decodeImage, extensionByMime, sha256 } from "./images.js";
+
+const log = getLogger("history");
 
 export interface ImageSink {
   /** Stores an image once (deduplicated by content hash) and returns its attachment id. */
@@ -37,7 +40,9 @@ export const externalizeImages = (messages: unknown[], sink: ImageSink, kind: At
     }
     return value;
   };
-  return messages.map((message, index) => visit(message, `message_${index}`));
+  const result = messages.map((message, index) => visit(message, `message_${index}`));
+  if (counter) log.debug("images externalized", { messages: messages.length, images: counter, kind });
+  return result;
 };
 
 /**

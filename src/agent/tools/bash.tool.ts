@@ -4,6 +4,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 
 import { CONFIG } from "../../config.js";
+import { getLogger, preview, since, type ScopedLogger } from "../../lib/logger.js";
 
 export const BASH_TOOL = "bash";
 
@@ -23,7 +24,7 @@ interface BashDetails {
  * workspace, streams combined stdout/stderr, kills the whole process group on
  * timeout or abort and truncates long output for the model.
  */
-export const createBashTool = (cwd: string): AgentTool<typeof parameters, BashDetails> => ({
+export const createBashTool = (cwd: string, logger: ScopedLogger = getLogger("tool:bash")): AgentTool<typeof parameters, BashDetails> => ({
   name: BASH_TOOL,
   label: "Bash",
   description:
@@ -34,12 +35,15 @@ export const createBashTool = (cwd: string): AgentTool<typeof parameters, BashDe
     "so prefer targeted commands (head, grep, wc) over dumping whole files.",
   parameters,
   executionMode: "sequential",
-  execute: async (_toolCallId, params, signal, onUpdate) => {
+  execute: async (toolCallId, params, signal, onUpdate) => {
+    const log = logger.child(BASH_TOOL);
     if (!fs.existsSync(cwd)) {
+      log.error("working directory missing", undefined, { cwd, toolCallId });
       throw new Error(`Working directory does not exist: ${cwd}`);
     }
     const timeoutMs = resolveTimeoutMs(params.timeout);
     const started = Date.now();
+    log.debug("spawn", { toolCallId, cwd, command: params.command, timeoutMs: timeoutMs ?? null });
 
     return new Promise((resolve, reject) => {
       const child = spawn("bash", ["-c", params.command], {
@@ -90,12 +94,14 @@ export const createBashTool = (cwd: string): AgentTool<typeof parameters, BashDe
       const timer = timeoutMs
         ? setTimeout(() => {
             killedBy = "timeout";
+            log.warn("timeout, killing process group", { toolCallId, pid: child.pid, timeoutMs, collectedBytes: collected });
             killTree();
           }, timeoutMs)
         : undefined;
 
       const onAbort = () => {
         killedBy = "abort";
+        log.warn("aborted, killing process group", { toolCallId, pid: child.pid, collectedBytes: collected });
         killTree();
       };
       signal?.addEventListener("abort", onAbort, { once: true });
@@ -103,6 +109,7 @@ export const createBashTool = (cwd: string): AgentTool<typeof parameters, BashDe
       child.on("error", (error) => {
         if (timer) clearTimeout(timer);
         signal?.removeEventListener("abort", onAbort);
+        log.error("spawn failed", error, { toolCallId, command: params.command });
         reject(new Error(`Failed to start bash: ${error.message}`));
       });
 
@@ -114,6 +121,17 @@ export const createBashTool = (cwd: string): AgentTool<typeof parameters, BashDe
         const { text, truncated } = truncateOutput(output);
         const exitCode = code ?? (signalName ? 128 + signalNumber(signalName) : null);
         const details: BashDetails = { exitCode, truncated, wallTimeSeconds };
+        log.info("exit", {
+          toolCallId,
+          pid: child.pid,
+          exitCode,
+          signal: signalName ?? null,
+          killedBy,
+          durationMs: since(started),
+          outputBytes: collected,
+          truncated,
+          output: preview(output, 500),
+        });
 
         if (killedBy === "abort") {
           resolve({ content: [{ type: "text", text: appendLine(text, "Command aborted") }], details, isError: true });

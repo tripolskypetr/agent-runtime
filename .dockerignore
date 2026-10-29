@@ -9,3 +9,4 @@ node_modules
 *.md
 tsconfig.json
 packages
+logs

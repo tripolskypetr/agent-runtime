@@ -28,6 +28,9 @@ import type { StreamFn } from "@earendil-works/pi-agent-core";
 
 import { CONFIG } from "../config.js";
 import { stripDataUrl } from "../helpers/images.js";
+import { getLogger, preview, since, type ScopedLogger } from "../lib/logger.js";
+
+const moduleLog = getLogger("ollama");
 
 export const OLLAMA_API: Api = "ollama-chat";
 export const OLLAMA_PROVIDER = "ollama";
@@ -153,11 +156,14 @@ let toolCallCounter = 0;
 const nextToolCallId = () => `call_${Date.now().toString(36)}_${(toolCallCounter++).toString(36)}`;
 
 /** Creates a pi StreamFn backed by ollama.chat. */
-export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => {
+export const createOllamaStreamFn = (options: OllamaStreamOptions, logger: ScopedLogger = moduleLog): StreamFn => {
+  let requestCounter = 0;
   return (model: Model<Api>, context: TranscriptContext, streamOptions?: SimpleStreamOptions) => {
     const stream = createAssistantMessageEventStream();
     const started = Date.now();
     const vision = model.input.includes("image");
+    const requestNo = ++requestCounter;
+    const log = logger.child(`ollama#${requestNo}`);
 
     const base: AssistantMessage = {
       role: "assistant",
@@ -179,6 +185,7 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => 
 
     const fail = (reason: "error" | "aborted", errorMessage: string) => {
       const message: AssistantMessage = { ...base, stopReason: reason, errorMessage, durationMs: Date.now() - started };
+      log.error(`chat ${reason}`, undefined, { errorMessage, durationMs: message.durationMs, model: model.id, host: options.host });
       stream.push({ type: "error", reason, error: message });
       stream.end(message);
     };
@@ -195,6 +202,23 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => 
       try {
         const tools = getCurrentTools(context.messages).map(toOllamaTool);
         const messages = toOllamaMessages(context.messages, vision);
+        log.debug("chat request", {
+          model: model.id,
+          host: options.host,
+          apiKey: options.apiKey ? "set" : "none",
+          think: options.think ?? "default",
+          options: { num_ctx: options.numCtx, num_predict: options.numPredict, temperature: options.temperature },
+          tools: tools.map((tool) => tool.function.name),
+          messages: messages.map((m) => ({
+            role: m.role,
+            ...(m.tool_name ? { tool_name: m.tool_name } : {}),
+            length: m.content.length,
+            images: m.images?.length ?? 0,
+            toolCalls: m.tool_calls?.map((call) => call.function.name),
+            preview: preview(m.content, 80),
+          })),
+          lastMessage: messages.length ? { role: messages[messages.length - 1].role, content: messages[messages.length - 1].content } : null,
+        });
 
         // Streaming keeps the HTTP response alive while the model generates:
         // Node's fetch drops a non-streaming request after 300 s without headers.
@@ -213,7 +237,9 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => 
 
         const partial: AssistantMessage = { ...base, content: [] };
         stream.push({ type: "start", partial: { ...partial } });
+        log.debug("stream opened", { afterMs: since(started) });
 
+        let chunkCount = 0;
         let thinkingIndex = -1;
         let textIndex = -1;
         const toolCalls: OllamaToolCall[] = [];
@@ -236,6 +262,7 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => 
         };
 
         for await (const chunk of chunks) {
+          chunkCount += 1;
           const delta = chunk.message;
           if (delta?.thinking) {
             if (textIndex >= 0) closeOpenBlocks();
@@ -259,6 +286,7 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => 
           }
           if (delta?.tool_calls?.length) {
             toolCalls.push(...delta.tool_calls);
+            log.debug("tool call chunk", { names: delta.tool_calls.map((call) => call.function.name), afterMs: since(started) });
           }
           if (chunk.done) {
             doneReason = chunk.done_reason;
@@ -297,6 +325,18 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => 
           responseModel,
           usage: { ...base.usage, input, output, totalTokens: input + output },
         };
+        log.info("chat response", {
+          model: response_model_or(responseModel, model.id),
+          stopReason,
+          doneReason,
+          durationMs: message.durationMs,
+          chunks: chunkCount,
+          tokens: { input, output },
+          thinkingLength: (partial.content.find((p) => p.type === "thinking") as ThinkingContent | undefined)?.thinking.length ?? 0,
+          textLength: (partial.content.find((p) => p.type === "text") as TextContent | undefined)?.text.length ?? 0,
+          text: preview((partial.content.find((p) => p.type === "text") as TextContent | undefined)?.text, 300),
+          toolCalls: toolCalls.map((call) => ({ name: call.function.name, arguments: call.function.arguments })),
+        });
         stream.push({ type: "done", reason: stopReason, message });
         stream.end(message);
       } catch (error) {
@@ -315,13 +355,16 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions): StreamFn => 
   };
 };
 
+const response_model_or = (responseModel: string | undefined, fallback: string) => responseModel ?? fallback;
+
 /** Ollama returns parsed objects, but some models emit the arguments as a JSON string. */
 const normalizeArguments = (value: unknown): ToolCall["arguments"] => {
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-    } catch {
+    } catch (error) {
+      moduleLog.warn("tool call arguments are not valid JSON", { raw: value, error: error instanceof Error ? error.message : String(error) });
       return {};
     }
   }

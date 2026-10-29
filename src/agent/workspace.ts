@@ -3,6 +3,9 @@ import path from "path";
 
 import { CONFIG } from "../config.js";
 import { sha256 } from "../helpers/images.js";
+import { getLogger } from "../lib/logger.js";
+
+const log = getLogger("workspace");
 
 /**
  * The data workspace: a single directory that is wiped before every inference,
@@ -17,6 +20,7 @@ export class Workspace {
     await fs.mkdir(this.root, { recursive: true });
     const entries = await fs.readdir(this.root);
     await Promise.all(entries.map((entry) => fs.rm(path.join(this.root, entry), { recursive: true, force: true })));
+    log.debug("reset", { root: this.root, removed: entries });
   }
 
   /**
@@ -28,6 +32,7 @@ export class Workspace {
     const absolute = path.resolve(this.root, normalized);
     const rootWithSep = this.root.endsWith(path.sep) ? this.root : this.root + path.sep;
     if (absolute !== this.root && !absolute.startsWith(rootWithSep)) {
+      log.warn("path escapes workspace", { requested: relativePath, resolved: absolute, root: this.root });
       throw new Error(`Path "${relativePath}" is outside of the workspace`);
     }
     return absolute;
@@ -48,6 +53,7 @@ export class Workspace {
     const absolute = this.resolve(relativePath);
     await fs.mkdir(path.dirname(absolute), { recursive: true });
     await fs.writeFile(absolute, bytes);
+    log.debug("write", { path: path.relative(this.root, absolute), size: bytes.byteLength });
     return path.relative(this.root, absolute);
   }
 
@@ -85,14 +91,22 @@ export class Workspace {
   public async collectOutputs(inputs: Map<string, string>): Promise<{ path: string; bytes: Buffer; sha256: string }[]> {
     const files = await this.listFiles();
     const outputs: { path: string; bytes: Buffer; sha256: string }[] = [];
+    const skipped: { path: string; reason: string }[] = [];
     for (const file of files) {
-      if (outputs.length >= CONFIG.OUTPUT_FILE_MAX_COUNT) break;
-      if (file.size > CONFIG.OUTPUT_FILE_MAX_BYTES) continue;
+      if (outputs.length >= CONFIG.OUTPUT_FILE_MAX_COUNT) {
+        skipped.push({ path: file.path, reason: "count limit" });
+        continue;
+      }
+      if (file.size > CONFIG.OUTPUT_FILE_MAX_BYTES) {
+        skipped.push({ path: file.path, reason: `size ${file.size} > ${CONFIG.OUTPUT_FILE_MAX_BYTES}` });
+        continue;
+      }
       const bytes = await this.read(file.path);
       const hash = sha256(bytes);
       if (inputs.get(file.path) === hash) continue;
       outputs.push({ path: file.path, bytes, sha256: hash });
     }
+    log.debug("collectOutputs", { total: files.length, inputs: inputs.size, outputs: outputs.map((o) => ({ path: o.path, size: o.bytes.byteLength })), skipped });
     return outputs;
   }
 }

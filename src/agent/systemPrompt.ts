@@ -2,7 +2,10 @@ import { readFile, stat } from "fs/promises";
 import Mustache from "mustache";
 
 import { CONFIG } from "../config.js";
+import { getLogger } from "../lib/logger.js";
 import type { FormatModel } from "../model/Format.model.js";
+
+const log = getLogger("systemPrompt");
 import type { InferenceMode } from "../model/Inference.model.js";
 
 export interface SystemPromptInput {
@@ -25,6 +28,7 @@ const loadTemplate = async (filePath: string): Promise<string> => {
   }
   const template = await readFile(filePath, "utf-8");
   templateCache.set(filePath, { mtimeMs: info.mtimeMs, template });
+  log.info(cached ? "template reloaded (file changed)" : "template loaded", { path: filePath, length: template.length, mtime: new Date(info.mtimeMs).toISOString() });
   return template;
 };
 

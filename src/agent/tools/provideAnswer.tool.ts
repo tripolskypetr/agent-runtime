@@ -3,6 +3,7 @@ import type { TSchema } from "@earendil-works/pi-ai";
 
 import type { FormatModel } from "../../model/Format.model.js";
 import { validateToolArguments } from "../../helpers/validateToolArguments.js";
+import { getLogger, type ScopedLogger } from "../../lib/logger.js";
 
 export const PROVIDE_ANSWER_TOOL = "provide_answer";
 
@@ -20,7 +21,8 @@ export interface ProvideAnswerHandle {
  * the request schema becomes the tool parameters, the arguments are validated
  * against it and a valid call ends the run.
  */
-export const createProvideAnswerTool = (schema: FormatModel): ProvideAnswerHandle => {
+export const createProvideAnswerTool = (schema: FormatModel, logger: ScopedLogger = getLogger("tool:provide_answer")): ProvideAnswerHandle => {
+  const log = logger.child(PROVIDE_ANSWER_TOOL);
   let answer: unknown | undefined;
   let hasAnswer = false;
   const failures: string[] = [];
@@ -34,14 +36,16 @@ export const createProvideAnswerTool = (schema: FormatModel): ProvideAnswerHandl
       "Call it exactly once, after you have gathered everything you need, with arguments that match the schema.",
     parameters: schema as unknown as TSchema,
     executionMode: "sequential",
-    execute: async (_toolCallId, params) => {
+    execute: async (toolCallId, params) => {
       const validation = validateToolArguments(params, schema);
       if (!validation.success) {
         failures.push(validation.error ?? "Validation failed");
+        log.warn("answer rejected", { toolCallId, error: validation.error, arguments: params, failuresSoFar: failures.length });
         throw new Error(`${validation.error}. Fix the arguments and call ${PROVIDE_ANSWER_TOOL} again.`);
       }
       answer = validation.data;
       hasAnswer = true;
+      log.info("answer accepted", { toolCallId, answer: validation.data });
       return {
         content: [{ type: "text", text: "Answer accepted." }],
         details: { accepted: true },

@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify";
 
 import type { Database } from "../db/database.js";
+import { getLogger } from "../lib/logger.js";
 import type { InferenceMode, InferenceStatus } from "../model/Inference.model.js";
+
+const log = getLogger("admin");
 
 interface ListQuery {
   limit?: number;
@@ -37,13 +40,16 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
         },
       },
     },
-    async (request) =>
-      db.listInferences({
+    async (request) => {
+      const result = db.listInferences({
         limit: request.query.limit ?? 50,
         offset: request.query.offset ?? 0,
         status: request.query.status,
         mode: request.query.mode,
-      }),
+      });
+      log.debug("list", { query: request.query, total: result.total, returned: result.items.length });
+      return result;
+    },
   );
 
   app.get<{ Params: { id: string } }>(
@@ -61,7 +67,11 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
     },
     async (request, reply) => {
       const record = db.getInference(request.params.id);
-      if (!record) return reply.code(404).send({ message: "Inference not found" });
+      if (!record) {
+        log.warn("get: not found", { id: request.params.id });
+        return reply.code(404).send({ message: "Inference not found" });
+      }
+      log.debug("get", { id: record.id, status: record.status, messages: record.messages.length, attachments: record.attachments.length });
       return record;
     },
   );
@@ -79,7 +89,11 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
     },
     async (request, reply) => {
       const attachment = db.getAttachment(request.params.id, request.params.attachmentId);
-      if (!attachment) return reply.code(404).send({ message: "Attachment not found" });
+      if (!attachment) {
+        log.warn("attachment: not found", { id: request.params.id, attachmentId: request.params.attachmentId });
+        return reply.code(404).send({ message: "Attachment not found" });
+      }
+      log.debug("attachment", { id: request.params.id, attachmentId: attachment.id, name: attachment.name, mime: attachment.mime, size: attachment.size, download: request.query.download });
       const disposition = request.query.download ? "attachment" : "inline";
       const fileName = attachment.name.split("/").pop() ?? "file";
       return reply
@@ -105,7 +119,11 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
       },
     },
     async (request, reply) => {
-      if (!db.deleteInference(request.params.id)) return reply.code(404).send({ message: "Inference not found" });
+      if (!db.deleteInference(request.params.id)) {
+        log.warn("delete: not found", { id: request.params.id });
+        return reply.code(404).send({ message: "Inference not found" });
+      }
+      log.info("deleted", { id: request.params.id });
       return { ok: true };
     },
   );

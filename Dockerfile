@@ -29,11 +29,12 @@ ENV NODE_ENV=production \
     PORT=10050 \
     HOST=0.0.0.0 \
     DATA_DIR=/app/data \
-    DB_PATH=/app/storage/agent-runtime.sqlite
+    DB_PATH=/app/storage/agent-runtime.sqlite \
+    LOGS_DIR=/app/logs
 
-RUN mkdir -p /app/data /app/storage
+RUN mkdir -p /app/data /app/storage /app/logs
 
-VOLUME ["/app/storage"]
+VOLUME ["/app/storage", "/app/logs"]
 
 EXPOSE 10050
 

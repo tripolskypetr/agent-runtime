@@ -25,9 +25,12 @@ services:
       - PORT=10050
       - DATA_DIR=/app/data
       - DB_PATH=/app/storage/agent-runtime.sqlite
+      - LOGS_DIR=/app/logs
     volumes:
       # SQLite database with the history of inferences, transcripts and files
       - ./storage:/app/storage
+      # Debug log: ./logs/debug.log (JSON lines, rotated at 100 MB) — read it first when something goes wrong
+      - ./logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:10050/api/v1/health"]
       interval: 30s

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 
 import { CONFIG } from "../config.js";
 import type { Database } from "../db/database.js";
+import { getLogger, preview, since } from "../lib/logger.js";
 import type { SerialQueue } from "../agent/queue.js";
 import { runInference } from "../agent/runInference.js";
 import { Workspace } from "../agent/workspace.js";
@@ -25,8 +26,23 @@ const handle = async (
   const id = randomUUID();
   const body = request.body;
   const modelName = body.model?.trim() || CONFIG.OLLAMA_MODEL;
-  const log = (message: string, data?: unknown) =>
-    data === undefined ? app.log.info({ inference: id, mode }, message) : app.log.info({ inference: id, mode, data }, message);
+  const received = Date.now();
+  const log = getLogger("inference").child(id);
+  request.log.info({ inference: id, mode }, "inference accepted");
+  log.info("request received", {
+    mode,
+    route: request.url,
+    requestId: request.id,
+    remote: request.ip,
+    model: modelName,
+    bodyBytes: request.headers["content-length"] ?? null,
+    messages: body.messages.map((m, index) => ({ index, role: m.role, length: m.content.length, images: m.images?.length ?? 0, preview: preview(m.content, 80) })),
+    files: (body.files ?? []).map((f) => ({ name: f.name, base64Length: f.content.length })),
+    format: "format" in body && body.format ? body.format : null,
+    instructions: preview(body.instructions),
+    queueAhead: deps.queue.pending,
+    queueRunning: deps.queue.running,
+  });
 
   deps.db.createInference({
     id,
@@ -40,9 +56,18 @@ const handle = async (
       ...(body.instructions ? { instructions: body.instructions } : {}),
     },
   });
-  log(`queued (${deps.queue.pending} ahead)`);
+  log.debug("record created, queued", { ahead: deps.queue.pending });
 
-  const outcome = await deps.queue.run(() => runInference(body, { id, mode, db: deps.db, workspace: deps.workspace, log }));
+  const outcome = await deps.queue.run(() => runInference(body, { id, mode, db: deps.db, workspace: deps.workspace, logger: log }), `${mode}:${id}`);
+  log.info("response", {
+    status: outcome.status,
+    httpStatus: outcome.status === "success" ? 200 : 500,
+    code: outcome.error?.code,
+    attempts: outcome.attempts,
+    turns: outcome.turns,
+    agentMs: outcome.durationMs,
+    totalMs: since(received),
+  });
 
   const common = { id, model: outcome.model, attempts: outcome.attempts, turns: outcome.turns, durationMs: outcome.durationMs };
   if (outcome.status === "success") {

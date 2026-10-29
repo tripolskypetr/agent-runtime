@@ -44,7 +44,7 @@ docker compose up -d
 - Admin UI (no password): http://localhost:10050/admin
 - Health: http://localhost:10050/api/v1/health
 
-The SQLite database lives in `./storage` next to the compose file.
+The SQLite database lives in `./storage` and the debug log in `./logs/debug.log` next to the compose file.
 
 ## API
 
@@ -143,7 +143,7 @@ All settings are environment variables (see [config/.env.example](config/.env.ex
 | `OLLAMA_API_KEY` | | Bearer token for ollama.com |
 | `OLLAMA_MODEL` | `gemma4:31b-cloud` | Default model; a request may override it |
 | `OLLAMA_VISION` | `1` | Attach images to messages and enable `view_image` |
-| `OLLAMA_THINK` | | `true`/`false` or `low`/`medium`/`high`; empty = model default |
+| `OLLAMA_THINK` | | `true`/`false` or `low`/`medium`/`high`; empty = model default. The `.env.example` sets `false` so thinking is off unless you enable it |
 | `MAX_ATTEMPTS` | `3` | Re-prompts when `provide_answer` was not called |
 | `MAX_TURNS` | `40` | Model calls per inference |
 | `INFERENCE_TIMEOUT_MS` | `900000` | Hard limit per inference |
@@ -153,8 +153,33 @@ All settings are environment variables (see [config/.env.example](config/.env.ex
 | `DB_PATH` | `./storage/agent-runtime.sqlite` | SQLite file |
 | `SYSTEM_PROMPT_PATH` | `./assets/system.mustache` | System prompt template for `/inference` (re-read when changed) |
 | `SYSTEM_PROMPT_TEXT_PATH` | `./assets/system-text.mustache` | System prompt template for `/text` |
+| `LOGS_DIR` / `LOG_FILE` | `./logs` / `debug.log` | Debug log location (see [Logging](#logging)) |
+| `LOG_CONSOLE` | `warn` | Echo of the debug log to stdout: `all`, `warn`, `off` |
 
 The system prompts are Mustache templates in [assets/system.mustache](assets/system.mustache) and [assets/system-text.mustache](assets/system-text.mustache); they receive the workspace path, file and image lists, the schema (object mode) and the extra instructions.
+
+## Logging
+
+Everything the service does is written to `./logs/debug.log` (`/app/logs/debug.log` in Docker, mounted as `./logs` by the compose file) through [pinolog](https://www.npmjs.com/package/pinolog): pino with rotation at 100 MB. One JSON line per event, `args` holds `[scope, message, data]`:
+
+```json
+{"level":30,"time":1793300000000,"logLevel":"info","createdAt":"…","createdBy":"debug.log","args":["inference:6d21baed-…","tool call",{"tool":"bash","toolCallId":"call_…","args":{"command":"head sales.csv"},"turn":2}]}
+```
+
+What is logged, by scope:
+
+| Scope | Events |
+|-------|--------|
+| `main`, `server` | startup with the effective config (secrets masked), listening, shutdown, unhandled errors |
+| `http` | every request and response with id, status and duration; 4xx as warn, 5xx as error |
+| `inference:<id>` | request summary, files and images written, rendered system prompt, every attempt, turn (stop reason, tool calls, tokens), tool call with arguments, tool result preview, retries with the reason, final result or failure |
+| `inference:<id>:ollama#n` | each model call: messages (roles, sizes, previews), tools, options, response text, tool calls, tokens, duration, provider errors |
+| `inference:<id>:bash` / `view_image` / `provide_answer` | command, exit code, duration, output preview, timeouts and kills; image path and size; validation failures and the accepted answer |
+| `workspace`, `queue`, `db`, `systemPrompt`, `admin` | workspace resets and writes, queue waits, every database write, template reloads, admin API calls |
+
+Secrets (`apiKey`, `authorization`, …) are masked, strings longer than 2000 characters (base64 images, prompts) are truncated, errors are stored with name, message and stack. Related settings: `LOGS_ENABLED`, `LOGS_DIR`, `LOG_FILE`, `LOG_CONSOLE` (`all` echoes everything to stdout, `warn` only warnings and errors, `off` nothing), `LOG_LEVEL` (Fastify's own request log on stdout).
+
+To follow one inference: `grep '<inference id>' logs/debug.log | jq -c '.args'`.
 
 ## Development
 

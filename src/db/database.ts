@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 
+import { getLogger } from "../lib/logger.js";
 import type {
   AttachmentKind,
   AttachmentMeta,
@@ -79,17 +80,22 @@ export interface ListOptions {
   mode?: InferenceMode;
 }
 
+const log = getLogger("db");
+
 export class Database {
   private readonly db: DatabaseSync;
 
   constructor(filePath: string) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const existed = fs.existsSync(filePath);
     this.db = new DatabaseSync(filePath);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.db.exec(SCHEMA);
     this.migrate();
     this.recoverInterrupted();
+    const count = (this.db.prepare(`SELECT COUNT(*) AS count FROM inferences`).get() as unknown as { count: number }).count;
+    log.info("opened", { path: filePath, existed, inferences: count, sqlite: (this.db.prepare("select sqlite_version() as v").get() as unknown as { v: string }).v });
   }
 
   /** Adds columns introduced after the first release to databases created by older versions. */
@@ -97,6 +103,7 @@ export class Database {
     const columns = (this.db.prepare(`PRAGMA table_info(inferences)`).all() as unknown as { name: string }[]).map((c) => c.name);
     if (!columns.includes("mode")) {
       this.db.exec(`ALTER TABLE inferences ADD COLUMN mode TEXT NOT NULL DEFAULT 'object'`);
+      log.info("migrated: added inferences.mode");
     }
   }
 
@@ -108,9 +115,10 @@ export class Database {
       message: "Process restarted while the inference was running",
       details: [],
     };
-    this.db
+    const result = this.db
       .prepare(`UPDATE inferences SET status = 'error', finished_at = ?, error_json = ? WHERE status = 'running'`)
       .run(now, JSON.stringify(error));
+    if (Number(result.changes) > 0) log.warn("recovered interrupted inferences", { count: Number(result.changes) });
   }
 
   public createInference(input: { id?: string; mode: InferenceMode; model: string; request: StoredRequest }): string {
@@ -120,17 +128,22 @@ export class Database {
         `INSERT INTO inferences (id, created_at, status, mode, model, request_json) VALUES (?, ?, 'running', ?, ?, ?)`,
       )
       .run(id, new Date().toISOString(), input.mode, input.model, JSON.stringify(input.request));
+    log.debug("createInference", { id, mode: input.mode, model: input.model });
     return id;
   }
 
   public updateRequest(id: string, request: StoredRequest) {
-    this.db.prepare(`UPDATE inferences SET request_json = ? WHERE id = ?`).run(JSON.stringify(request), id);
+    const json = JSON.stringify(request);
+    this.db.prepare(`UPDATE inferences SET request_json = ? WHERE id = ?`).run(json, id);
+    log.debug("updateRequest", { id, bytes: json.length, files: request.files.length, messages: request.messages.length });
   }
 
   public updateProgress(id: string, input: { messages: unknown[]; attempts: number; turns: number }) {
+    const json = JSON.stringify(input.messages);
     this.db
       .prepare(`UPDATE inferences SET messages_json = ?, attempts = ?, turns = ? WHERE id = ?`)
-      .run(JSON.stringify(input.messages), input.attempts, input.turns, id);
+      .run(json, input.attempts, input.turns, id);
+    log.debug("updateProgress", { id, attempts: input.attempts, turns: input.turns, messages: input.messages.length, bytes: json.length });
   }
 
   public finishInference(
@@ -162,6 +175,7 @@ export class Database {
         input.error === null ? null : JSON.stringify(input.error),
         id,
       );
+    log.debug("finishInference", { id, status: input.status, attempts: input.attempts, turns: input.turns, durationMs: input.durationMs, messages: input.messages.length, errorCode: input.error?.code });
   }
 
   public addAttachment(input: {
@@ -178,6 +192,7 @@ export class Database {
         `INSERT INTO attachments (id, inference_id, kind, name, mime, size, sha256, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(id, input.inferenceId, input.kind, input.name, input.mime, input.data.byteLength, input.sha256, input.data);
+    log.debug("addAttachment", { id, inferenceId: input.inferenceId, kind: input.kind, name: input.name, mime: input.mime, size: input.data.byteLength });
     return {
       id,
       inferenceId: input.inferenceId,
@@ -256,10 +271,12 @@ export class Database {
 
   public deleteInference(id: string): boolean {
     const result = this.db.prepare(`DELETE FROM inferences WHERE id = ?`).run(id);
+    log.debug("deleteInference", { id, deleted: Number(result.changes) > 0 });
     return Number(result.changes) > 0;
   }
 
   public close() {
+    log.info("closed");
     this.db.close();
   }
 }
