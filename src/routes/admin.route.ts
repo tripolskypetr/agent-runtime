@@ -1,12 +1,13 @@
 import type { FastifyInstance } from "fastify";
 
 import type { Database } from "../db/database.js";
-import type { InferenceStatus } from "../model/Inference.model.js";
+import type { InferenceMode, InferenceStatus } from "../model/Inference.model.js";
 
 interface ListQuery {
   limit?: number;
   offset?: number;
   status?: InferenceStatus;
+  mode?: InferenceMode;
 }
 
 export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
@@ -22,6 +23,7 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
             limit: { type: "integer", minimum: 1, maximum: 500, default: 50 },
             offset: { type: "integer", minimum: 0, default: 0 },
             status: { type: "string", enum: ["running", "success", "error"] },
+            mode: { type: "string", enum: ["object", "text"] },
           },
         },
         response: {
@@ -40,6 +42,7 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
         limit: request.query.limit ?? 50,
         offset: request.query.offset ?? 0,
         status: request.query.status,
+        mode: request.query.mode,
       }),
   );
 

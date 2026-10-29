@@ -8,6 +8,7 @@
     total: 0,
     offset: 0,
     status: "",
+    mode: "",
     selectedId: null,
     record: null,
     tab: "transcript",
@@ -67,6 +68,7 @@
     if (reset) state.offset = 0;
     const params = new URLSearchParams({ limit: String(reset ? Math.max(PAGE, state.items.length || PAGE) : PAGE), offset: String(reset ? 0 : state.offset) });
     if (state.status) params.set("status", state.status);
+    if (state.mode) params.set("mode", state.mode);
     const data = await fetchJson(`${API}/inferences?${params}`);
     state.total = data.total;
     state.items = reset ? data.items : state.items.concat(data.items);
@@ -116,6 +118,7 @@
             el("span", { class: "title" }, short(item.id)),
             el("span", { class: "time" }, fmtTime(item.createdAt)),
             el("span", { class: "sub" }, [
+              el("span", { class: "kind" }, item.mode || "object"),
               el("span", {}, item.model),
               el("span", {}, fmtDuration(item.durationMs)),
               el("span", {}, `${item.attempts} att · ${item.turns} turns`),
@@ -141,6 +144,7 @@
       el("div", { class: "detail-head" }, [
         el("div", { style: "display:flex;gap:10px;align-items:center;flex-wrap:wrap" }, [
           el("span", { class: `badge ${record.status}` }, record.status),
+          el("span", { class: "kind" }, record.mode || "object"),
           el("h2", {}, record.id),
         ]),
         el("div", { style: "display:flex;gap:8px" }, [
@@ -191,7 +195,11 @@
       );
     }
     if (record.result !== null && record.result !== undefined) {
-      wrap.append(el("h3", {}, "provide_answer"), json(record.result));
+      if (record.mode === "text") {
+        wrap.append(el("h3", {}, "text answer"), el("div", { class: "msg" }, el("div", { class: "msg-body" }, el("div", { class: "text" }, String(record.result)))));
+      } else {
+        wrap.append(el("h3", {}, "provide_answer"), json(record.result));
+      }
     } else if (!record.error) {
       wrap.append(el("div", { class: "empty" }, record.status === "running" ? "Still running…" : "No result."));
     }
@@ -213,7 +221,7 @@
       );
     });
     if (request.instructions) wrap.append(el("h3", {}, "instructions"), el("pre", { class: "json" }, request.instructions));
-    wrap.append(el("h3", {}, "format"), json(request.format || {}));
+    if (request.format) wrap.append(el("h3", {}, "format"), json(request.format));
     return wrap;
   };
 
@@ -304,6 +312,10 @@
 
   $("#statusFilter").addEventListener("change", (event) => {
     state.status = event.target.value;
+    loadList().catch(console.error);
+  });
+  $("#modeFilter").addEventListener("change", (event) => {
+    state.mode = event.target.value;
     loadList().catch(console.error);
   });
   $("#reload").addEventListener("click", () => loadList().catch(console.error));

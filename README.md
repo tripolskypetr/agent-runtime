@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="https://raw.githubusercontent.com/tripolskypetr/agent-runtime/main/assets/logo.png" height="115px" alt="garch" />
+</p>
+
+<p align="center">
   <strong>agent-runtime</strong><br>
   REST API harness for a <a href="https://github.com/earendil-works/pi">pi</a>-based AI agent on Ollama.<br>
   Structured JSON answers · bash and image tools in an isolated workspace · SQLite history · admin UI · Swagger.
@@ -6,7 +10,7 @@
 
 ## What it does
 
-`POST /api/v1/inference` takes a conversation (text and photos), a set of files and a JSON schema, runs an agent and returns an object that matches the schema.
+`POST /api/v1/inference` takes a conversation (text and photos), a set of files and a JSON schema, runs an agent and returns an object that matches the schema. `POST /api/v1/text` does the same without a schema and returns the agent's final message as plain text (the `generateObject` / `generateText` pair of json-inference).
 
 The agent loop is [`@earendil-works/pi-agent-core`](https://github.com/earendil-works/pi/tree/main/packages/agent); inference goes through the [`ollama`](https://www.npmjs.com/package/ollama) SDK with native tool calling, exactly like `OllamaProvider` in [json-inference](https://github.com/tripolskypetr/json-inference). Every run has three tools:
 
@@ -22,7 +26,7 @@ Harness rules:
 2. If the model answers with text instead of calling `provide_answer`, a user message demanding the tool call is appended and the model is prompted again on the same conversation, up to `MAX_ATTEMPTS` times.
 3. Inferences run one at a time (shared workspace); callers queue.
 4. Every inference, successful or failed, is stored in SQLite with the full transcript, request files, images, images viewed by tools and files the agent produced.
-5. A failed inference returns HTTP 500 with a JSON error (`schema_mismatch`, `max_turns`, `timeout`, `provider_error`, `internal_error`).
+5. A failed inference returns HTTP 500 with a JSON error (`schema_mismatch`, `empty_answer`, `max_turns`, `timeout`, `provider_error`, `internal_error`).
 
 ## Quick start (Docker)
 
@@ -82,13 +86,27 @@ Failure (500):
 
 Malformed requests are rejected with 400 before an inference is created.
 
+### `POST /api/v1/text`
+
+The `generateText` counterpart: the same `messages`, `files`, `model` and `instructions`, no `format`. The agent still has `bash` and `view_image`; the text of its final message is returned as is.
+
+```json
+{ "messages": [{ "role": "user", "content": "Summarise report.pdf in three sentences" }], "files": [{ "name": "report.pdf", "content": "<base64>" }] }
+```
+
+```json
+{ "id": "…", "status": "success", "text": "The report …", "model": "gemma4:31b-cloud", "attempts": 1, "turns": 3, "durationMs": 5120 }
+```
+
+If the model finishes without text it is asked again up to `MAX_ATTEMPTS` times, then a 500 with code `empty_answer` is returned. Text runs are stored like the others and marked `mode: "text"` in the admin UI and in `GET /api/v1/inferences?mode=text`.
+
 **Long requests.** The response is sent only when the agent finishes, which can take minutes (several model turns, bash commands, retries). Use an HTTP client without a response timeout: Node's `fetch` gives up after 300 s by default, so call it with an `undici` `Agent({ headersTimeout: 0, bodyTimeout: 0 })` or use `node:http` as [scripts/smoke.ts](scripts/smoke.ts) does. The server itself has no request timeout; `INFERENCE_TIMEOUT_MS` bounds the agent. Model calls go to Ollama as streaming requests, so slow models do not hit the same 300 s limit inside the harness.
 
 ### Admin API
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/inferences?limit&offset&status` | List inferences, newest first |
+| `GET` | `/api/v1/inferences?limit&offset&status&mode` | List inferences, newest first |
 | `GET` | `/api/v1/inferences/:id` | Request, transcript, result or error, attachments |
 | `GET` | `/api/v1/inferences/:id/attachments/:attachmentId` | Raw bytes of a file or image (`?download=true` to download) |
 | `DELETE` | `/api/v1/inferences/:id` | Delete an inference |
@@ -112,9 +130,10 @@ All settings are environment variables (see [config/.env.example](config/.env.ex
 | `BODY_LIMIT_MB` | `256` | Request body limit |
 | `DATA_DIR` | `./data` | Agent workspace |
 | `DB_PATH` | `./storage/agent-runtime.sqlite` | SQLite file |
-| `SYSTEM_PROMPT_PATH` | `./assets/system.mustache` | System prompt template (re-read when changed) |
+| `SYSTEM_PROMPT_PATH` | `./assets/system.mustache` | System prompt template for `/inference` (re-read when changed) |
+| `SYSTEM_PROMPT_TEXT_PATH` | `./assets/system-text.mustache` | System prompt template for `/text` |
 
-The system prompt is a Mustache template in [assets/system.mustache](assets/system.mustache); it receives the workspace path, file and image lists, the schema and the extra instructions.
+The system prompts are Mustache templates in [assets/system.mustache](assets/system.mustache) and [assets/system-text.mustache](assets/system-text.mustache); they receive the workspace path, file and image lists, the schema (object mode) and the extra instructions.
 
 ## Development
 
@@ -138,24 +157,6 @@ npm run publish:win    # windows:     npm run build && scripts\win\publish.bat
 ```
 
 Both build `tripolskypetr/agent-runtime` for `linux/amd64` and push `:latest`. The image is `node:26-alpine` plus `bash`, `curl`, `jq`, `file`, `python3` (with Pillow) and ImageMagick for the agent's shell.
-
-## Project layout
-
-```
-src/
-  index.ts, server.ts, config.ts       Fastify app, Swagger, static admin UI
-  routes/                              inference, admin, health
-  agent/runInference.ts                workspace → agent loop → retries → persistence
-  agent/ollama.ts                      pi StreamFn over ollama.chat (tools + think)
-  agent/tools/                         provide_answer, bash, view_image
-  agent/workspace.ts                   data dir lifecycle and output snapshot
-  db/database.ts                       node:sqlite schema and queries
-  helpers/validateToolArguments.ts     copied from json-inference
-assets/system.mustache                 system prompt
-public/                                admin UI (vanilla JS)
-config/                                docker-compose.yaml and .env.example for deployment
-scripts/                               publish.sh / publish.bat, smoke.ts
-```
 
 ## License
 

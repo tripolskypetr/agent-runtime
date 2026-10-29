@@ -30,6 +30,8 @@ export const createServer = async (): Promise<AppContext> => {
     bodyLimit: CONFIG.BODY_LIMIT_BYTES,
     requestTimeout: 0,
     keepAliveTimeout: 65_000,
+    // `example` is an OpenAPI keyword used for Swagger samples; Ajv must be told to ignore it.
+    ajv: { customOptions: { keywords: ["example"] } },
   });
 
   for (const schema of sharedSchemas) {

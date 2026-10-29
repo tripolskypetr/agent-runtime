@@ -141,6 +141,34 @@ const results: boolean[] = [];
   results.push(report(`image via view_image (${ms} ms, ${json.turns} turns)`, ok, { status, data: json.data, error: json.error }));
 }
 
+/* ---- 2b. text endpoint (generateText) ---- */
+{
+  const started = Date.now();
+  const response = await new Promise<{ status: number; json: any }>((resolve, reject) => {
+    const url = new URL("/api/v1/text", BASE_URL);
+    const payload = JSON.stringify({
+      messages: [{ role: "user", content: "notes.txt is in your working directory. Read it with bash and answer in one sentence: what is the meeting date and who must attend?" }],
+      files: [{ name: "notes.txt", content: Buffer.from("Team sync moved to Thursday, 14 November, 10:00. Mandatory for backend leads (Ivan, Olga).").toString("base64") }],
+    });
+    const request = (url.protocol === "https:" ? https : http).request(
+      url,
+      { method: "POST", headers: { "content-type": "application/json", "content-length": Buffer.byteLength(payload) }, timeout: 0 },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          try { resolve({ status: res.statusCode ?? 0, json: JSON.parse(Buffer.concat(chunks).toString("utf-8")) }); } catch (e) { reject(e); }
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end(payload);
+  });
+  const text = String(response.json.text ?? "");
+  const ok = response.status === 200 && /november|14/i.test(text) && /ivan|olga/i.test(text);
+  results.push(report(`text via /api/v1/text (${Date.now() - started} ms, ${response.json.turns} turns)`, ok, { status: response.status, text, error: response.json.error }));
+}
+
 /* ---- 3. error path: unknown model → 500 with error JSON ---- */
 {
   const { status, json, ms } = await post({

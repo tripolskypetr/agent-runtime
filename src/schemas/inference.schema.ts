@@ -52,6 +52,41 @@ export const inferenceRequestSchema = {
     instructions: { type: "string", description: "Extra instructions appended to the system prompt" },
   },
   additionalProperties: false,
+  example: {
+    messages: [
+      { role: "user", content: "Обзор рынка криптовалют 07.09.2023. Найди упомянутые активы и общее настроение." },
+      { role: "user", content: "", images: ["/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD...<base64 jpeg>"] },
+    ],
+    files: [{ name: "sales.csv", content: "Y2l0eSxhbW91bnQKQmVybGluLDEyMC41ClBhcmlzLDM0MC4yNQ==" }],
+    format: {
+      type: "object",
+      required: ["summary", "sentiment", "assets"],
+      properties: {
+        summary: { type: "string", description: "Краткое содержание, 2-3 предложения" },
+        sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"], description: "Общее настроение" },
+        assets: { type: "array", items: { type: "string" }, description: "Упомянутые тикеры" },
+      },
+    },
+    model: "gemma4:31b-cloud",
+    instructions: "Отвечай на русском языке.",
+  },
+} as const;
+
+export const textRequestSchema = {
+  $id: "TextRequest",
+  type: "object",
+  required: ["messages"],
+  properties: {
+    messages: { type: "array", minItems: 1, items: { $ref: "RequestMessage#" } },
+    files: { type: "array", items: { $ref: "RequestFile#" } },
+    model: { type: "string", description: "Ollama model name; defaults to OLLAMA_MODEL" },
+    instructions: { type: "string", description: "Extra instructions appended to the system prompt" },
+  },
+  additionalProperties: false,
+  example: {
+    messages: [{ role: "user", content: "notes.txt лежит в рабочей папке. Прочитай его через bash и ответь одним предложением: когда встреча и кто обязан прийти?" }],
+    files: [{ name: "notes.txt", content: "VGVhbSBzeW5jIG1vdmVkIHRvIFRodXJzZGF5LCAxNCBOb3ZlbWJlciwgMTA6MDAu" }],
+  },
 } as const;
 
 export const inferenceErrorSchema = {
@@ -59,9 +94,18 @@ export const inferenceErrorSchema = {
   type: "object",
   required: ["code", "message", "details"],
   properties: {
-    code: { type: "string", enum: ["schema_mismatch", "max_turns", "timeout", "provider_error", "internal_error"] },
+    code: { type: "string", enum: ["schema_mismatch", "empty_answer", "max_turns", "timeout", "provider_error", "internal_error"] },
     message: { type: "string" },
     details: { type: "array", items: { type: "string" } },
+  },
+  example: {
+    code: "schema_mismatch",
+    message: "Model failed to call provide_answer with a valid answer after 3 attempts",
+    details: [
+      "attempt 1: model replied with text instead of calling provide_answer: Настроение рынка нейтральное…",
+      "attempt 2: provide_answer rejected: Invalid arguments: sentiment: expected one of [bullish, bearish, neutral], got \"positive\"",
+      "attempt 3: model did not call provide_answer",
+    ],
   },
 } as const;
 
@@ -78,6 +122,39 @@ export const inferenceSuccessSchema = {
     turns: { type: "integer" },
     durationMs: { type: "integer" },
   },
+  example: {
+    id: "6d21baed-6f7e-4c1a-9d2b-3a0c1f5e8b21",
+    status: "success",
+    data: { summary: "Обзор описывает расширение Ripple в Азии и обсуждение правил G20.", sentiment: "neutral", assets: ["BTC", "XRP", "ETH"] },
+    model: "gemma4:31b-cloud",
+    attempts: 1,
+    turns: 3,
+    durationMs: 4350,
+  },
+} as const;
+
+export const textSuccessSchema = {
+  $id: "TextSuccess",
+  type: "object",
+  required: ["id", "status", "text", "model", "attempts", "turns", "durationMs"],
+  properties: {
+    id: { type: "string" },
+    status: { type: "string", enum: ["success"] },
+    text: { type: "string", description: "The agent's final message" },
+    model: { type: "string" },
+    attempts: { type: "integer" },
+    turns: { type: "integer" },
+    durationMs: { type: "integer" },
+  },
+  example: {
+    id: "9c0f2a4e-2b7d-4e51-8f3a-1d2e3f4a5b6c",
+    status: "success",
+    text: "Встреча перенесена на четверг, 14 ноября, 10:00; обязаны прийти backend-лиды Иван и Ольга.",
+    model: "gemma4:31b-cloud",
+    attempts: 1,
+    turns: 2,
+    durationMs: 2140,
+  },
 } as const;
 
 export const inferenceFailureSchema = {
@@ -92,6 +169,19 @@ export const inferenceFailureSchema = {
     attempts: { type: "integer" },
     turns: { type: "integer" },
     durationMs: { type: "integer" },
+  },
+  example: {
+    id: "3379627a-2817-4185-a8bf-9fd6654c177a",
+    status: "error",
+    error: {
+      code: "provider_error",
+      message: "Ollama request failed (404): model 'model-that-does-not-exist:latest' not found",
+      details: [],
+    },
+    model: "model-that-does-not-exist:latest",
+    attempts: 1,
+    turns: 1,
+    durationMs: 311,
   },
 } as const;
 
@@ -114,6 +204,7 @@ export const inferenceSummarySchema = {
   type: "object",
   properties: {
     id: { type: "string" },
+    mode: { type: "string", enum: ["object", "text"] },
     status: { type: "string", enum: ["running", "success", "error"] },
     model: { type: "string" },
     createdAt: { type: "string" },
@@ -160,8 +251,10 @@ export const sharedSchemas = [
   requestMessageSchema,
   requestFileSchema,
   inferenceRequestSchema,
+  textRequestSchema,
   inferenceErrorSchema,
   inferenceSuccessSchema,
+  textSuccessSchema,
   inferenceFailureSchema,
   attachmentMetaSchema,
   inferenceSummarySchema,

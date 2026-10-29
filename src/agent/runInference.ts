@@ -6,9 +6,9 @@ import { CONFIG } from "../config.js";
 import type { Database } from "../db/database.js";
 import { createImageSink, externalizeImages } from "../helpers/history.js";
 import { decodeImage, extensionByMime, guessFileMime, sha256, stripDataUrl } from "../helpers/images.js";
-import type { InferenceError, InferenceRequest, StoredRequest } from "../model/Inference.model.js";
+import type { InferenceError, InferenceMode, InferenceRequest, StoredRequest, TextRequest } from "../model/Inference.model.js";
 import { createOllamaModel, createOllamaStreamFn, defaultOllamaOptions, OLLAMA_API, OLLAMA_PROVIDER } from "./ollama.js";
-import { renderSystemPrompt, RETRY_MESSAGE } from "./systemPrompt.js";
+import { renderSystemPrompt, RETRY_MESSAGE, TEXT_RETRY_MESSAGE } from "./systemPrompt.js";
 import { createBashTool } from "./tools/bash.tool.js";
 import { createProvideAnswerTool, PROVIDE_ANSWER_TOOL } from "./tools/provideAnswer.tool.js";
 import { createViewImageTool } from "./tools/viewImage.tool.js";
@@ -16,6 +16,8 @@ import { Workspace } from "./workspace.js";
 
 export interface RunContext {
   id: string;
+  /** `object`: answer through provide_answer validated against `format`; `text`: the last assistant text (generateText). */
+  mode: InferenceMode;
   db: Database;
   workspace: Workspace;
   log: (message: string, data?: unknown) => void;
@@ -23,6 +25,7 @@ export interface RunContext {
 
 export interface InferenceOutcome {
   status: "success" | "error";
+  /** The validated object in `object` mode, the answer string in `text` mode. */
   data?: unknown;
   error?: InferenceError;
   model: string;
@@ -37,8 +40,9 @@ export interface InferenceOutcome {
  * retry with an explicit JSON demand while provide_answer was not called →
  * snapshot produced files → persist transcript → clear workspace.
  */
-export const runInference = async (request: InferenceRequest, ctx: RunContext): Promise<InferenceOutcome> => {
-  const { id, db, workspace, log } = ctx;
+export const runInference = async (request: InferenceRequest | TextRequest, ctx: RunContext): Promise<InferenceOutcome> => {
+  const { id, mode, db, workspace, log } = ctx;
+  const format = mode === "object" && "format" in request ? request.format : undefined;
   const started = Date.now();
   const modelName = request.model?.trim() || CONFIG.OLLAMA_MODEL;
   const vision = CONFIG.OLLAMA_VISION;
@@ -142,22 +146,28 @@ export const runInference = async (request: InferenceRequest, ctx: RunContext): 
     db.updateRequest(id, {
       messages: storedMessages,
       files: storedFiles,
-      format: request.format,
+      ...(format ? { format } : {}),
       model: modelName,
       ...(request.instructions ? { instructions: request.instructions } : {}),
     });
 
     // 2. Agent with the three tools.
     const systemPrompt = await renderSystemPrompt({
+      mode,
       workspace: workspace.root,
       files: fileList,
       images: imageList,
-      schema: request.format,
+      schema: format,
       vision,
       instructions: extraInstructions.join("\n\n") || undefined,
     });
-    const provide = createProvideAnswerTool(request.format);
+    const provide = format ? createProvideAnswerTool(format) : null;
     const model = createOllamaModel(modelName, vision, ollamaOptions);
+    const tools = [
+      ...(provide ? [provide.tool] : []),
+      createBashTool(workspace.root),
+      createViewImageTool(workspace, vision),
+    ];
 
     let maxTurnsHit = false;
     let timedOut = false;
@@ -167,18 +177,18 @@ export const runInference = async (request: InferenceRequest, ctx: RunContext): 
         systemPrompt,
         model,
         thinkingLevel: "off",
-        tools: [provide.tool, createBashTool(workspace.root), createViewImageTool(workspace, vision)],
+        tools,
       },
       streamFn: createOllamaStreamFn(ollamaOptions),
       toolExecution: "sequential",
       beforeToolCall: async () => {
-        if (provide.hasAnswer) {
+        if (provide?.hasAnswer) {
           return { block: true, reason: "The answer was already accepted.", terminate: true };
         }
         return undefined;
       },
       finishTurn: async () => {
-        if (provide.hasAnswer) return { action: "end" };
+        if (provide?.hasAnswer) return { action: "end" };
         if (turns >= CONFIG.MAX_TURNS) {
           maxTurnsHit = true;
           return { action: "end" };
@@ -214,9 +224,9 @@ export const runInference = async (request: InferenceRequest, ctx: RunContext): 
         attempts += 1;
         log(`attempt ${attempts}/${CONFIG.MAX_ATTEMPTS}`);
         await agent.prompt(nextPrompt);
-        if (provide.hasAnswer) break;
-
         const last = lastAssistant(agent.state.messages);
+        if (provide ? provide.hasAnswer : hasTextAnswer(last)) break;
+
         if (timedOut) {
           fatal = { code: "timeout", message: `Inference exceeded ${CONFIG.INFERENCE_TIMEOUT_MS} ms`, details };
           break;
@@ -234,6 +244,12 @@ export const runInference = async (request: InferenceRequest, ctx: RunContext): 
           break;
         }
 
+        if (!provide) {
+          details.push(`attempt ${attempts}: model finished without a text answer`);
+          log(details[details.length - 1]);
+          nextPrompt = [{ role: "user", content: TEXT_RETRY_MESSAGE, timestamp: Date.now() }];
+          continue;
+        }
         const newFailures = provide.failures.slice(failuresSeen);
         failuresSeen = provide.failures.length;
         const reason = newFailures.length
@@ -262,10 +278,11 @@ export const runInference = async (request: InferenceRequest, ctx: RunContext): 
     }
     transcript = snapshot(agent.state.messages);
 
-    if (provide.hasAnswer) {
+    const finalAssistant = lastAssistant(agent.state.messages);
+    if (provide ? provide.hasAnswer : hasTextAnswer(finalAssistant)) {
       return finish({
         status: "success",
-        data: provide.answer,
+        data: provide ? provide.answer : assistantText(finalAssistant!).trim(),
         model: modelName,
         attempts,
         turns,
@@ -273,11 +290,19 @@ export const runInference = async (request: InferenceRequest, ctx: RunContext): 
       });
     }
     if (fatal) return fail(fatal);
-    return fail({
-      code: "schema_mismatch",
-      message: `Model failed to call ${PROVIDE_ANSWER_TOOL} with a valid answer after ${attempts} attempts`,
-      details,
-    });
+    return fail(
+      provide
+        ? {
+            code: "schema_mismatch",
+            message: `Model failed to call ${PROVIDE_ANSWER_TOOL} with a valid answer after ${attempts} attempts`,
+            details,
+          }
+        : {
+            code: "empty_answer",
+            message: `Model produced no text answer after ${attempts} attempts`,
+            details,
+          },
+    );
   } catch (error) {
     log("internal error", error);
     return fail({
@@ -297,6 +322,10 @@ const lastAssistant = (messages: readonly AgentMessage[]): AssistantMessage | un
   }
   return undefined;
 };
+
+/** Text mode succeeds when the last assistant message ended normally with non-empty text. */
+const hasTextAnswer = (message: AssistantMessage | undefined): boolean =>
+  !!message && message.stopReason === "stop" && assistantText(message).trim().length > 0;
 
 const assistantText = (message: AssistantMessage): string =>
   message.content

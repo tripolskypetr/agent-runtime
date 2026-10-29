@@ -58,6 +58,7 @@ export const CONFIG = {
   DATA_DIR: path.resolve(root, env("DATA_DIR", "./data")),
   DB_PATH: path.resolve(root, env("DB_PATH", "./storage/agent-runtime.sqlite")),
   SYSTEM_PROMPT_PATH: path.resolve(root, env("SYSTEM_PROMPT_PATH", "./assets/system.mustache")),
+  SYSTEM_PROMPT_TEXT_PATH: path.resolve(root, env("SYSTEM_PROMPT_TEXT_PATH", "./assets/system-text.mustache")),
   PUBLIC_DIR: path.resolve(root, env("PUBLIC_DIR", "./public")),
 } as const;
 

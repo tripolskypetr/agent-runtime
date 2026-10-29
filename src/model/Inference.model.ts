@@ -17,6 +17,9 @@ export interface RequestFile {
   content: string;
 }
 
+export type InferenceMode = "object" | "text";
+
+/** Request of POST /api/v1/inference (structured answer via provide_answer). */
 export interface InferenceRequest {
   messages: RequestMessage[];
   files?: RequestFile[];
@@ -25,10 +28,19 @@ export interface InferenceRequest {
   instructions?: string;
 }
 
+/** Request of POST /api/v1/text (plain text answer, as generateText in json-inference). */
+export interface TextRequest {
+  messages: RequestMessage[];
+  files?: RequestFile[];
+  model?: string;
+  instructions?: string;
+}
+
 export type InferenceStatus = "running" | "success" | "error";
 
 export type InferenceErrorCode =
   | "schema_mismatch"
+  | "empty_answer"
   | "max_turns"
   | "timeout"
   | "provider_error"
@@ -57,13 +69,15 @@ export interface AttachmentMeta {
 export interface StoredRequest {
   messages: { role: RequestRole; content: string; images?: string[] }[];
   files: { attachmentId: string; name: string; size: number }[];
-  format: FormatModel;
+  /** Present in `object` mode only. */
+  format?: FormatModel;
   model: string;
   instructions?: string;
 }
 
 export interface InferenceSummary {
   id: string;
+  mode: InferenceMode;
   status: InferenceStatus;
   model: string;
   createdAt: string;

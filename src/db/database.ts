@@ -7,6 +7,7 @@ import type {
   AttachmentKind,
   AttachmentMeta,
   InferenceError,
+  InferenceMode,
   InferenceRecord,
   InferenceStatus,
   InferenceSummary,
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS inferences (
   created_at    TEXT NOT NULL,
   finished_at   TEXT,
   status        TEXT NOT NULL,
+  mode          TEXT NOT NULL DEFAULT 'object',
   model         TEXT NOT NULL,
   attempts      INTEGER NOT NULL DEFAULT 0,
   turns         INTEGER NOT NULL DEFAULT 0,
@@ -49,6 +51,7 @@ interface InferenceRow {
   created_at: string;
   finished_at: string | null;
   status: InferenceStatus;
+  mode: InferenceMode;
   model: string;
   attempts: number;
   turns: number;
@@ -73,6 +76,7 @@ export interface ListOptions {
   limit: number;
   offset: number;
   status?: InferenceStatus;
+  mode?: InferenceMode;
 }
 
 export class Database {
@@ -84,7 +88,16 @@ export class Database {
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.db.exec(SCHEMA);
+    this.migrate();
     this.recoverInterrupted();
+  }
+
+  /** Adds columns introduced after the first release to databases created by older versions. */
+  private migrate() {
+    const columns = (this.db.prepare(`PRAGMA table_info(inferences)`).all() as unknown as { name: string }[]).map((c) => c.name);
+    if (!columns.includes("mode")) {
+      this.db.exec(`ALTER TABLE inferences ADD COLUMN mode TEXT NOT NULL DEFAULT 'object'`);
+    }
   }
 
   /** Inferences left in `running` state by a previous process crash are marked as errors. */
@@ -100,13 +113,13 @@ export class Database {
       .run(now, JSON.stringify(error));
   }
 
-  public createInference(input: { id?: string; model: string; request: StoredRequest }): string {
+  public createInference(input: { id?: string; mode: InferenceMode; model: string; request: StoredRequest }): string {
     const id = input.id ?? randomUUID();
     this.db
       .prepare(
-        `INSERT INTO inferences (id, created_at, status, model, request_json) VALUES (?, ?, 'running', ?, ?)`,
+        `INSERT INTO inferences (id, created_at, status, mode, model, request_json) VALUES (?, ?, 'running', ?, ?, ?)`,
       )
-      .run(id, new Date().toISOString(), input.model, JSON.stringify(input.request));
+      .run(id, new Date().toISOString(), input.mode, input.model, JSON.stringify(input.request));
     return id;
   }
 
@@ -192,14 +205,23 @@ export class Database {
   }
 
   public listInferences(options: ListOptions): { items: InferenceSummary[]; total: number } {
-    const where = options.status ? `WHERE status = ?` : "";
-    const params: (string | number)[] = options.status ? [options.status] : [];
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+    if (options.status) {
+      conditions.push("status = ?");
+      params.push(options.status);
+    }
+    if (options.mode) {
+      conditions.push("mode = ?");
+      params.push(options.mode);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const total = (
       this.db.prepare(`SELECT COUNT(*) AS count FROM inferences ${where}`).get(...params) as unknown as { count: number }
     ).count;
     const rows = this.db
       .prepare(
-        `SELECT i.id, i.created_at, i.finished_at, i.status, i.model, i.attempts, i.turns, i.duration_ms,
+        `SELECT i.id, i.created_at, i.finished_at, i.status, i.mode, i.model, i.attempts, i.turns, i.duration_ms,
                 i.request_json, i.error_json,
                 (SELECT COUNT(*) FROM attachments a WHERE a.inference_id = i.id AND a.kind = 'file') AS file_count,
                 json_array_length(i.messages_json) AS message_count
@@ -256,6 +278,7 @@ const toSummary = (row: InferenceRow, messageCount: number, fileCount: number): 
   const error = row.error_json ? (JSON.parse(row.error_json) as InferenceError) : null;
   return {
     id: row.id,
+    mode: row.mode ?? "object",
     status: row.status,
     model: row.model,
     createdAt: row.created_at,

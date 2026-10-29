@@ -24,10 +24,15 @@
     <aside class="sidebar">
       <div class="sidebar-head">
         <select id="statusFilter">
-          <option value="">all</option>
+          <option value="">all statuses</option>
           <option value="running">running</option>
           <option value="success">success</option>
           <option value="error">error</option>
+        </select>
+        <select id="modeFilter">
+          <option value="">all modes</option>
+          <option value="object">object</option>
+          <option value="text">text</option>
         </select>
         <span id="listTotal" class="muted"></span>
         <button id="reload" class="icon" title="reload">↻</button>
