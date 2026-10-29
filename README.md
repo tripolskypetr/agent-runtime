@@ -5,7 +5,7 @@
 <p align="center">
   <strong>agent-runtime</strong><br>
   REST API harness for a <a href="https://github.com/earendil-works/pi">pi</a>-based AI agent on Ollama.<br>
-  Structured JSON answers · bash and image tools in an isolated workspace · SQLite history · admin UI · Swagger.
+  Structured JSON answers · SQLite history · admin UI · Swagger · <br>bash and image tools in an isolated workspace
 </p>
 
 ## What it does
