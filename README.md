@@ -115,7 +115,7 @@ If the model finishes without text it is asked again up to `MAX_ATTEMPTS` times,
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/inferences?limit&offset&status&mode` | List inferences, newest first |
+| `GET` | `/api/v1/inferences?limit&offset&status&mode&q` | List inferences, newest first; `q` is a case-insensitive substring search over request, result, error, id and model |
 | `GET` | `/api/v1/inferences/:id` | Request, transcript, result or error, attachments |
 | `GET` | `/api/v1/inferences/:id/attachments/:attachmentId` | Raw bytes of a file or image (`?download=true` to download) |
 | `DELETE` | `/api/v1/inferences/:id` | Delete an inference |

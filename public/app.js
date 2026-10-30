@@ -1,12 +1,13 @@
 /* agent-runtime admin: plain JS, no dependencies. */
 (() => {
   const API = "/api/v1";
-  const PAGE = 50;
 
   const state = {
     items: [],
     total: 0,
-    offset: 0,
+    page: 0,
+    pageSize: 50,
+    q: "",
     status: "",
     mode: "",
     selectedId: null,
@@ -65,15 +66,24 @@
     }
   };
 
-  const loadList = async (reset = true) => {
-    if (reset) state.offset = 0;
-    const params = new URLSearchParams({ limit: String(reset ? Math.max(PAGE, state.items.length || PAGE) : PAGE), offset: String(reset ? 0 : state.offset) });
+  let listSeq = 0;
+  const pageCount = () => Math.max(1, Math.ceil(state.total / state.pageSize));
+  /** Loads the current page with the current filters and search; a newer call wins over an older one still in flight. */
+  const loadList = async () => {
+    const seq = ++listSeq;
+    const params = new URLSearchParams({ limit: String(state.pageSize), offset: String(state.page * state.pageSize) });
     if (state.status) params.set("status", state.status);
     if (state.mode) params.set("mode", state.mode);
+    if (state.q) params.set("q", state.q);
     const data = await fetchJson(`${API}/inferences?${params}`);
+    if (seq !== listSeq) return;
     state.total = data.total;
-    state.items = reset ? data.items : state.items.concat(data.items);
-    state.offset = state.items.length;
+    if (state.page >= pageCount()) {
+      // the page vanished (deletion, filter or search change): fall back to the last existing one
+      state.page = pageCount() - 1;
+      return loadList();
+    }
+    state.items = data.items;
     renderList();
   };
 
@@ -131,8 +141,13 @@
         ),
       ),
     );
-    $("#listTotal").textContent = `${state.items.length} / ${state.total}`;
-    $("#more").style.display = state.items.length < state.total ? "" : "none";
+    if (!state.items.length) list.append(el("li", { class: "none" }, state.q ? "nothing matches the search" : "no inferences"));
+    const from = state.total ? state.page * state.pageSize + 1 : 0;
+    const to = Math.min(state.total, (state.page + 1) * state.pageSize);
+    $("#listTotal").textContent = state.q ? `${state.total} found` : `${state.total} total`;
+    $("#pageInfo").textContent = `${from}–${to} of ${state.total} · page ${state.page + 1}/${pageCount()}`;
+    $("#prev").disabled = state.page === 0;
+    $("#next").disabled = state.page >= pageCount() - 1;
   };
 
   /* ---------- detail ---------- */
@@ -556,15 +571,53 @@
 
   $("#statusFilter").addEventListener("change", (event) => {
     state.status = event.target.value;
+    state.page = 0;
     loadList().catch(console.error);
   });
   $("#modeFilter").addEventListener("change", (event) => {
     state.mode = event.target.value;
+    state.page = 0;
     loadList().catch(console.error);
   });
   $("#reload").addEventListener("click", () => loadList().catch(console.error));
   $("#newInference").addEventListener("click", openCompose);
-  $("#more").addEventListener("click", () => loadList(false).catch(console.error));
+  $("#prev").addEventListener("click", () => {
+    if (state.page === 0) return;
+    state.page -= 1;
+    loadList().catch(console.error);
+  });
+  $("#next").addEventListener("click", () => {
+    if (state.page >= pageCount() - 1) return;
+    state.page += 1;
+    loadList().catch(console.error);
+  });
+  $("#pageSize").addEventListener("change", (event) => {
+    state.pageSize = Number(event.target.value);
+    state.page = 0;
+    loadList().catch(console.error);
+  });
+  let searchTimer = null;
+  const applySearch = (value) => {
+    const q = value.trim();
+    if (q === state.q) return;
+    state.q = q;
+    state.page = 0;
+    loadList().catch(console.error);
+  };
+  $("#search").addEventListener("input", (event) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => applySearch(event.target.value), 300);
+  });
+  $("#search").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      clearTimeout(searchTimer);
+      applySearch(event.target.value);
+    } else if (event.key === "Escape") {
+      event.target.value = "";
+      clearTimeout(searchTimer);
+      applySearch("");
+    }
+  });
   $("#autoRefresh").addEventListener("change", (event) => {
     state.auto = event.target.checked;
   });

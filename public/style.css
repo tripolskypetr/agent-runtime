@@ -66,7 +66,14 @@ code { font-family: var(--mono); font-size: 12px; }
 .sidebar { border-right: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
 .sidebar-head { display: flex; gap: 8px; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); }
 .sidebar-head select { flex: 1; }
-.sidebar-foot { padding: 8px; border-top: 1px solid var(--border); text-align: center; }
+.sidebar-foot { padding: 8px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
+.sidebar-foot input[type="search"] { width: 100%; border: 1px solid var(--border); background: var(--bg); border-radius: 6px; padding: 6px 10px; font: inherit; color: inherit; }
+.pager { display: flex; align-items: center; gap: 8px; }
+.pager #pageInfo { flex: 1; text-align: center; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pager select { padding: 2px 6px; font-size: 12px; }
+.pager button:disabled { opacity: .4; cursor: default; }
+.list li.none { display: block; cursor: default; color: var(--muted); text-align: center; padding: 20px; }
+.list li.none:hover { background: transparent; }
 .list { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; }
 .list li { padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; display: grid; grid-template-columns: 10px 1fr auto; gap: 8px 10px; align-items: center; }
 .list li:hover { background: var(--accent-soft); }

@@ -11,6 +11,7 @@ interface ListQuery {
   offset?: number;
   status?: InferenceStatus;
   mode?: InferenceMode;
+  q?: string;
 }
 
 export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
@@ -27,6 +28,7 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
             offset: { type: "integer", minimum: 0, default: 0 },
             status: { type: "string", enum: ["running", "success", "error"] },
             mode: { type: "string", enum: ["object", "text"] },
+            q: { type: "string", maxLength: 200, description: "Case-insensitive substring search over id, model, request (messages, instructions, file names, schema), result and error" },
           },
         },
         response: {
@@ -46,6 +48,7 @@ export const registerAdminRoutes = (app: FastifyInstance, db: Database) => {
         offset: request.query.offset ?? 0,
         status: request.query.status,
         mode: request.query.mode,
+        q: request.query.q,
       });
       log.debug("list", { query: request.query, total: result.total, returned: result.items.length });
       return result;

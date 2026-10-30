@@ -78,9 +78,14 @@ export interface ListOptions {
   offset: number;
   status?: InferenceStatus;
   mode?: InferenceMode;
+  /** Case-insensitive substring over id, model, request, result and error. */
+  q?: string;
 }
 
 const log = getLogger("db");
+
+/** Columns the admin search looks into: request_json holds messages, instructions, file names and the schema. */
+const SEARCH_COLUMNS = ["id", "model", "request_json", "result_json", "error_json"];
 
 export class Database {
   private readonly db: DatabaseSync;
@@ -91,6 +96,8 @@ export class Database {
     this.db = new DatabaseSync(filePath);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
+    // Unicode case folding for the admin search: SQLite's LIKE and lower() fold ASCII only.
+    this.db.function("fold", { deterministic: true }, (value: unknown) => (typeof value === "string" ? value.toLowerCase() : value));
     this.db.exec(SCHEMA);
     this.migrate();
     this.recoverInterrupted();
@@ -229,6 +236,12 @@ export class Database {
     if (options.mode) {
       conditions.push("mode = ?");
       params.push(options.mode);
+    }
+    const q = options.q?.trim().toLowerCase();
+    if (q) {
+      const pattern = `%${q.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+      conditions.push(`(${SEARCH_COLUMNS.map((column) => `fold(${column}) LIKE ? ESCAPE '\\'`).join(" OR ")})`);
+      params.push(...SEARCH_COLUMNS.map(() => pattern));
     }
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const total = (

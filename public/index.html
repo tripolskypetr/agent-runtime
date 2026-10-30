@@ -40,7 +40,17 @@
       </div>
       <ul id="list" class="list"></ul>
       <div class="sidebar-foot">
-        <button id="more" class="ghost">load more</button>
+        <input id="search" type="search" placeholder="search messages, result, error, id, model…" autocomplete="off">
+        <div class="pager">
+          <button id="prev" class="icon" title="previous page">‹</button>
+          <span id="pageInfo" class="muted"></span>
+          <button id="next" class="icon" title="next page">›</button>
+          <select id="pageSize" title="per page">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
       </div>
     </aside>
 
