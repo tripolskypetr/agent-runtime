@@ -49,8 +49,47 @@ const codePoints = (text: string): number => Array.from(text).length;
  */
 const rankOf = (error: string): number => {
   const depth = (error.slice(0, error.indexOf(":")).match(/[.[]/g) ?? []).length;
-  const typeMismatch = /: must be [a-z ]+, got [a-z]+$/.test(error);
-  return depth * 2 + (typeMismatch ? 0 : 1);
+  return depth * 2 + (isTypeMismatch(error) ? 0 : 1);
+};
+
+const isTypeMismatch = (error: string): boolean => /: must be [a-z ]+, got [a-z]+$/.test(error);
+
+/**
+ * One message for a failed oneOf/anyOf at `path`. When some branch matched the value's shape and
+ * failed inside it, that branch's (deepest) error is the useful one. When every branch failed at
+ * `path` itself, no branch is preferable, so the alternatives are merged into one line
+ * ("must be null or object, got string") instead of reporting the first branch as if it were
+ * the only option.
+ */
+const branchError = (errors: string[], path: string): string => {
+  const prefix = `${path}: `;
+  // branches that matched the value's type and failed on content are the ones worth reporting;
+  // "must be null, got object" from the other branch is not an alternative the model should take
+  const content = errors.filter((error) => !isTypeMismatch(error));
+  const pool = content.length ? content : errors;
+  const atRoot = pool.every((error) => error.slice(0, error.indexOf(":")) === path);
+  if (!atRoot) return pool.reduce((best, error) => (rankOf(error) > rankOf(best) ? error : best), pool[0] ?? "does not match the schema");
+  const messages = [...new Set(pool.map((error) => error.slice(prefix.length)))];
+  const types: string[] = [];
+  const values: string[] = [];
+  const others: string[] = [];
+  let got = "";
+  for (const message of messages) {
+    const type = /^must be ([a-z ]+), got ([a-z]+)$/.exec(message);
+    const exact = /^must be exactly (.+)$/.exec(message);
+    const oneOf = /^must be one of \[(.+)\]$/.exec(message);
+    if (type) {
+      for (const name of type[1].split(" or ")) if (!types.includes(name)) types.push(name);
+      got = type[2];
+    } else if (exact) values.push(exact[1]);
+    else if (oneOf) values.push(oneOf[1]);
+    else others.push(message);
+  }
+  const parts: string[] = [];
+  if (types.length) parts.push(`must be ${types.join(" or ")}, got ${got}`);
+  if (values.length) parts.push(`must be one of [${values.join(",")}]`);
+  parts.push(...others);
+  return `${path}: ${parts.join("; or ")}`;
 };
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
@@ -256,12 +295,12 @@ export const validateValue = (value: unknown, schema: any, path: string, root: a
   }
   if (Array.isArray(node.anyOf)) {
     const errors = (node.anyOf as Schema[]).map((sub) => validateValue(value, sub, path, root));
-    if (!errors.some((error) => error === null)) return deepest(errors as string[]);
+    if (!errors.some((error) => error === null)) return branchError(errors as string[], path);
   }
   if (Array.isArray(node.oneOf)) {
     const errors = (node.oneOf as Schema[]).map((sub) => validateValue(value, sub, path, root));
     const passed = errors.filter((error) => error === null).length;
-    if (passed === 0) return deepest(errors as string[]);
+    if (passed === 0) return branchError(errors as string[], path);
     if (passed > 1) return `${path}: must match exactly one of the allowed shapes, matched ${passed}`;
   }
   if (node.not !== undefined && validateValue(value, node.not, path, root) === null) return `${path}: must NOT match the forbidden shape`;
@@ -297,10 +336,6 @@ const describeCondition = (schema: any, path: string): string => {
   if (typeof schema.$ref === "string") parts.push(`${path} matches ${schema.$ref}`);
   return parts.length ? parts.join(" and ") : `${path} matches ${show(schema).slice(0, 120)}`;
 };
-
-/** The most specific of several branch errors (see rankOf; first on ties). */
-const deepest = (errors: string[]): string =>
-  errors.reduce((best, error) => (rankOf(error) > rankOf(best) ? error : best), errors[0] ?? "does not match the schema");
 
 export const validateToolArguments = <T = any>(parsedArguments: unknown, schema: FormatModel): ValidationResult<T> => {
   if (parsedArguments == null) {

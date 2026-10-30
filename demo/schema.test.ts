@@ -92,7 +92,7 @@ reject("maxItems: too many based_on_claim_ids", agent1, withSignal({ ...goodSign
 check("nullable: the string \"null\" is still a valid string (prompt rule 5 covers it, not the schema)", validateToolArguments({ ...fixtureA, article: { ...fixtureA.article, published_at: "null" } }, agent1).success);
 check("nullable: published_at null ok", validateToolArguments({ ...fixtureA, article: { ...fixtureA.article, published_at: null } }, agent1).success);
 reject("nullable: published_at number", agent1, { ...fixtureA, article: { ...fixtureA.article, published_at: 5 } }, /article\.published_at: must be string or null/);
-reject("oneOf: signal is a string", agent1, withSignal("none"), /^Invalid arguments: signal: must be (null|object)/);
+reject("oneOf: signal is a string → both alternatives named, no branch preferred", agent1, withSignal("none"), /^Invalid arguments: signal: must be null or object, got string$/);
 const { rationale: _r, ...signalWithoutRationale } = goodSignal;
 reject("oneOf: missing property inside the object branch names the property, not the null branch", agent1, withSignal(signalWithoutRationale), /^Invalid arguments: signal: is missing required property "rationale"$/);
 reject("oneOf: wrong type inside the object branch", agent1, withSignal({ ...goodSignal, ttl_hours: "24" }), /^Invalid arguments: signal\.ttl_hours: must be number, got string$/);
@@ -122,6 +122,7 @@ const kw = (schema: Record<string, unknown>) => ({ type: "object", required: ["v
 const cases: [string, FormatModel, unknown, boolean][] = [
   ["anyOf number|string", kw({ anyOf: [{ type: "number" }, { type: "string" }] }), { v: "x" }, true],
   ["anyOf none match", kw({ anyOf: [{ type: "number" }, { type: "string" }] }), { v: true }, false],
+  ["oneOf of consts merged into one list", kw({ oneOf: [{ const: "a" }, { const: "b" }] }), { v: "c" }, false],
   ["not", kw({ not: { const: "no" } }), { v: "no" }, false],
   ["if/else", kw({ type: "object", properties: { a: { type: "integer" } }, if: { properties: { a: { const: 1 } }, required: ["a"] }, then: { required: ["b"] }, else: { required: ["c"] } }), { v: { a: 2, c: 1 } }, true],
   ["if/else fails", kw({ type: "object", properties: { a: { type: "integer" } }, if: { properties: { a: { const: 1 } }, required: ["a"] }, then: { required: ["b"] }, else: { required: ["c"] } }), { v: { a: 2 } }, false],
@@ -155,6 +156,8 @@ for (const [name, schema, value, expected] of cases) {
   check(`kw: ${name}`, result.success === expected && agree(schema, value), result.error);
 }
 check("else branch names the condition with 'unless'", /v: is missing required property "c" \(rule: unless v\.a is 1\)$/.test(validateToolArguments({ v: { a: 2 } }, kw({ type: "object", properties: { a: { type: "integer" } }, if: { properties: { a: { const: 1 } }, required: ["a"] }, then: { required: ["b"] }, else: { required: ["c"] } })).error ?? ""), validateToolArguments({ v: { a: 2 } }, kw({ type: "object", properties: { a: { type: "integer" } }, if: { properties: { a: { const: 1 } }, required: ["a"] }, then: { required: ["b"] }, else: { required: ["c"] } })).error);
+check("oneOf consts: message lists both values", /^Invalid arguments: v: must be one of \["a","b"\]$/.test(validateToolArguments({ v: "c" }, kw({ oneOf: [{ const: "a" }, { const: "b" }] })).error ?? ""), validateToolArguments({ v: "c" }, kw({ oneOf: [{ const: "a" }, { const: "b" }] })).error);
+check("anyOf types: message lists both types", /^Invalid arguments: v: must be number or string, got boolean$/.test(validateToolArguments({ v: true }, kw({ anyOf: [{ type: "number" }, { type: "string" }] })).error ?? ""), validateToolArguments({ v: true }, kw({ anyOf: [{ type: "number" }, { type: "string" }] })).error);
 check("validateValue: unresolvable $ref is reported, not thrown", /unresolvable \$ref/.test(validateValue({ v: 1 }, { type: "object", properties: { v: { $ref: "#/$defs/nope" } } }, "answer") ?? ""));
 check(`parity shared validator vs ajv on ${parity.length} values`, parity.every(Boolean));
 
