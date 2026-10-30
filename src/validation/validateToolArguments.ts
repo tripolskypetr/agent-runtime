@@ -258,13 +258,36 @@ export const validateValue = (value: unknown, schema: any, path: string, root: a
   }
   if (node.not !== undefined && validateValue(value, node.not, path, root) === null) return `${path}: must NOT match the forbidden shape`;
   if (node.if !== undefined) {
-    const branch = validateValue(value, node.if, path, root) === null ? node.then : node.else;
+    const holds = validateValue(value, node.if, path, root) === null;
+    const branch = holds ? node.then : node.else;
     if (branch !== undefined) {
       const error = validateValue(value, branch, path, root);
-      if (error) return error;
+      // a then/else violation only makes sense together with its condition: "signal: must be null" alone reads as
+      // an absolute rule, while the fix may be on the other side of the condition (e.g. a different verdict)
+      if (error) return `${error} (rule: ${holds ? "when" : "unless"} ${describeCondition(node.if, path)})`;
     }
   }
   return null;
+};
+
+/** Human-readable form of an `if` schema: `verdict is "summary_only"`, `a.b is one of [...]`, `(x is true or y is true)`. */
+const describeCondition = (schema: any, path: string): string => {
+  if (schema === true) return "always";
+  if (schema === false) return "never";
+  if (!isObject(schema)) return "the condition holds";
+  const parts: string[] = [];
+  if ("const" in schema) parts.push(`${path} is ${show(schema.const)}`);
+  if (Array.isArray(schema.enum)) parts.push(`${path} is one of ${show(schema.enum)}`);
+  if (schema.type !== undefined && !("const" in schema) && !Array.isArray(schema.enum)) parts.push(`${path} is ${Array.isArray(schema.type) ? schema.type.join(" or ") : schema.type}`);
+  if (isObject(schema.properties)) {
+    for (const [key, sub] of Object.entries(schema.properties as Record<string, unknown>)) parts.push(describeCondition(sub, join(path, key)));
+  }
+  if (Array.isArray(schema.allOf)) parts.push(...(schema.allOf as unknown[]).map((sub) => describeCondition(sub, path)));
+  if (Array.isArray(schema.anyOf)) parts.push(`(${(schema.anyOf as unknown[]).map((sub) => describeCondition(sub, path)).join(" or ")})`);
+  if (Array.isArray(schema.oneOf)) parts.push(`(exactly one of: ${(schema.oneOf as unknown[]).map((sub) => describeCondition(sub, path)).join(", ")})`);
+  if (schema.not !== undefined) parts.push(`not (${describeCondition(schema.not, path)})`);
+  if (typeof schema.$ref === "string") parts.push(`${path} matches ${schema.$ref}`);
+  return parts.length ? parts.join(" and ") : `${path} matches ${show(schema).slice(0, 120)}`;
 };
 
 /** The most specific of several branch errors: the one with the deepest path (first on ties). */
