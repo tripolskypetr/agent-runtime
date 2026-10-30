@@ -13,6 +13,7 @@ import { createOllamaModel, createOllamaStreamFn, defaultOllamaOptions, OLLAMA_A
 import { renderSystemPrompt, RETRY_MESSAGE, TEXT_RETRY_MESSAGE } from "./systemPrompt.js";
 import { createBashTool } from "./tools/bash.tool.js";
 import { createProvideAnswerTool, PROVIDE_ANSWER_TOOL } from "./tools/provideAnswer.tool.js";
+import { createReadFileTool } from "./tools/readFile.tool.js";
 import { createViewImageTool } from "./tools/viewImage.tool.js";
 import { Workspace } from "./workspace.js";
 
@@ -217,6 +218,7 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
     const tools = [
       ...(provide ? [provide.tool] : []),
       createBashTool(workspace.root, log),
+      createReadFileTool(workspace, log),
       createViewImageTool(workspace, vision, log),
     ];
     log.debug("agent created", { tools: tools.map((tool) => tool.name), model: model.id, host: model.baseUrl, input: model.input });

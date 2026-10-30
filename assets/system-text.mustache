@@ -13,6 +13,7 @@ Your working directory is `{{{workspace}}}`. It contains the files attached to t
 ## Tools
 
 - `bash` — run shell commands in the working directory: inspect files, run `python3`, `jq`, ImageMagick (`identify`, `magick`) and other utilities. You may create temporary files there.
+- `read_file` — read a text file from the working directory, with `offset`/`limit` for large files. Use it to examine text files instead of `cat` or `sed`.
 - `view_image` — look at an image file from the working directory{{^vision}} (unavailable for the current model: use bash instead){{/vision}}.
 
 ## Rules

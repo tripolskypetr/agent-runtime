@@ -98,7 +98,7 @@ export const registerInferenceRoutes = (app: FastifyInstance, deps: InferenceDep
         tags: ["inference"],
         summary: "Run the agent and return a structured answer (generateObject)",
         description:
-          "Writes the request files and images into the data workspace, runs the agent (bash, view_image, provide_answer) " +
+          "Writes the request files and images into the data workspace, runs the agent (bash, read_file, view_image, provide_answer) " +
           "on Ollama and returns the provide_answer arguments validated against `format` (JSON Schema draft 2020-12, see FormatModel). " +
           "A schema that does not compile (e.g. a `$ref` to a missing `$defs` entry) is rejected with 400 `invalid_format` before anything runs. " +
           "Inferences are executed one at a time; the workspace is wiped before and after each one. " +
@@ -122,7 +122,7 @@ export const registerInferenceRoutes = (app: FastifyInstance, deps: InferenceDep
         tags: ["inference"],
         summary: "Run the agent and return a plain text answer (generateText)",
         description:
-          "Same workspace, tools (bash, view_image) and history as /api/v1/inference, but without a schema: " +
+          "Same workspace, tools (bash, read_file, view_image) and history as /api/v1/inference, but without a schema: " +
           "the text of the agent's final message is returned as is. If the model finishes without text, it is asked again " +
           "up to MAX_ATTEMPTS times; afterwards a 500 with code `empty_answer` is returned.",
         body: { $ref: "TextRequest#" },

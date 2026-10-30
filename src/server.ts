@@ -75,7 +75,7 @@ export const createServer = async (): Promise<AppContext> => {
       info: {
         title: "agent-runtime",
         description:
-          "REST harness for a pi-based agent on Ollama. POST /api/v1/inference runs the agent with bash, view_image and " +
+          "REST harness for a pi-based agent on Ollama. POST /api/v1/inference runs the agent with bash, read_file, view_image and " +
           "provide_answer tools in an isolated data workspace and returns a JSON answer matching the given schema.",
         version: "0.1.0",
       },

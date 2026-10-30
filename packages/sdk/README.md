@@ -5,7 +5,7 @@
 [![npm](https://img.shields.io/npm/v/agent-runtime-sdk.svg?style=flat-square)](https://npmjs.org/package/agent-runtime-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)]()
 
-agent-runtime is a REST harness for a [pi](https://github.com/earendil-works/pi)-based agent on Ollama: it runs the agent with `bash`, `view_image` and `provide_answer` tools in an isolated workspace and returns an answer that matches a JSON schema. This package wraps its HTTP API with the same `generateObject()` / `generateText()` pair as [json-inference](https://github.com/tripolskypetr/json-inference), plus the admin API.
+agent-runtime is a REST harness for a [pi](https://github.com/earendil-works/pi)-based agent on Ollama: it runs the agent with `bash`, `read_file`, `view_image` and `provide_answer` tools in an isolated workspace and returns an answer that matches a JSON schema. This package wraps its HTTP API with the same `generateObject()` / `generateText()` pair as [json-inference](https://github.com/tripolskypetr/json-inference), plus the admin API.
 
 ## Features
 

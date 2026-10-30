@@ -117,6 +117,31 @@ const results: boolean[] = [];
   results.push(report(`csv via bash (${ms} ms, ${json.turns} turns, ${json.attempts} attempts)`, ok, { status, data: json.data, error: json.error }));
 }
 
+/* ---- 1b. text file via read_file ---- */
+{
+  const lines = Array.from({ length: 60 }, (_, i) => `line ${i + 1}: ${i + 1 === 42 ? "the secret word is PELICAN" : "nothing here"}`).join("\n");
+  const { status, json, ms } = await post({
+    messages: [
+      {
+        role: "user",
+        content: "The file notes.txt is in your working directory. Read it with read_file (not bash) and report the secret word and the line it is on.",
+      },
+    ],
+    files: [{ name: "notes.txt", content: Buffer.from(lines).toString("base64") }],
+    format: {
+      type: "object",
+      required: ["word", "line"],
+      properties: {
+        word: { type: "string", description: "The secret word, exactly as written" },
+        line: { type: "integer", description: "1-based line number where it appears" },
+      },
+    },
+  });
+  const data = json.data ?? {};
+  const ok = status === 200 && data.word === "PELICAN" && data.line === 42;
+  results.push(report(`text file via read_file (${ms} ms, ${json.turns} turns)`, ok, { status, data: json.data, error: json.error }));
+}
+
 /* ---- 2. image + view_image ---- */
 {
   const png = encodePng(160, 160, (x, y) => {
