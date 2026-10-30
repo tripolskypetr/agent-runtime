@@ -9,13 +9,13 @@ agent-runtime is a REST harness for a [pi](https://github.com/earendil-works/pi)
 
 ## Features
 
-- `generateObject()`: the return type is derived from the `format` schema via `InferFormat<F>`; string enums become unions, `required` decides which keys are optional, nested objects and arrays recurse
+- `generateObject()`: the return type is derived from the `format` schema via `InferFormat<F>`: `enum` and `const` become literals, `type: ["string", "null"]` becomes `string | null`, `oneOf` a union, `$ref` into `$defs` recurses, `required` decides which keys are optional
 - `generateText()`: plain text answers from the same agent
 - `inference()` / `text()`: the full typed response (`status: "success" | "error"`) without throwing
 - `AgentRuntimeError` with the server's error code, per-attempt details and inference id
 - Admin API: list inferences, read transcripts, download attachments, delete runs
 - Zero runtime dependencies, Node 18+ (global `fetch`), ESM and CommonJS builds, bundled `types.d.ts`
-- Schemas are compatible with json-inference's `FormatModel`
+- `format` is a full JSON Schema (draft 2020-12), enforced server-side by ajv; json-inference `FormatModel` schemas are a subset and work unchanged
 
 ## Installation
 
@@ -77,43 +77,78 @@ const report = await client.generateObject({ messages, format });
 
 ## Type inference
 
-`InferFormat<F>` maps a schema to the answer type:
+`format` is a full JSON Schema (draft 2020-12) with an object at the top level; the server validates every answer against it with ajv. `InferFormat<F>` maps the schema to the answer type:
 
 | Schema | Type |
 |--------|------|
+| `{ const: "1.0.0" }` | `"1.0.0"` |
+| `{ enum: ["a", "b"] }`, `{ enum: ["a", null] }` | `"a" \| "b"`, `"a" \| null` (literal schema) or `string` (widened schema) |
 | `{ type: "string" }` | `string` |
-| `{ type: "string", enum: ["a", "b"] }` | `"a" \| "b"` (literal schema) or `string` (widened schema) |
+| `{ type: ["string", "null"] }` | `string \| null` |
+| `{ type: "null" }` | `null` |
 | `{ type: "number" }`, `{ type: "integer" }` | `number` |
 | `{ type: "boolean" }` | `boolean` |
+| `{ oneOf: [A, B] }`, `{ anyOf: [A, B] }` | `InferProperty<A> \| InferProperty<B>` |
+| `{ allOf: [A, B] }` | `InferProperty<A> & InferProperty<B>` |
+| `{ if, then, else }` | ignored: the type comes from the rest of the node |
 | `{ type: "array", items: X }` | `InferProperty<X>[]` |
 | `{ type: "object", properties, required }` | object with `required` keys mandatory, the rest optional |
+| `{ $ref: "#/$defs/name" }` | the type of `$defs.name`, recursively |
+
+Recursive `$ref`s (a predicate tree of `all` / `any` / `not`, for example) are followed six levels deep; a reference below that is typed `unknown`. That depth limit is the one deliberate restriction of the inference: the whole contract is a single `defineFormat()` call, there is no second, hand-written answer type to keep in sync with the schema. Six levels cover the practical nesting of such trees (the server has no depth limit, it validates the real schema).
 
 To declare a schema separately and keep the literals, wrap it in `defineFormat()`:
 
 ```typescript
 import { defineFormat, generateObject, type InferFormat } from "agent-runtime-sdk";
 
-export const TradingPositionFormat = defineFormat({
+export const Agent1Format = defineFormat({
   type: "object",
-  required: ["id", "symbol", "position", "targets", "stoploss"],
-  properties: {
-    id: { type: "number", description: "ID сообщения, -1 если сигнала нет" },
-    symbol: { type: "string", description: "Тикер в формате BTCUSDT" },
-    position: { type: "string", enum: ["long", "short", "wait"], description: "Тип позиции" },
-    targets: { type: "array", items: { type: "number" }, description: "Цели" },
-    stoploss: { type: "number", description: "Стоп-лосс" },
-    reasoning: { type: "string", description: "Обоснование" },
+  additionalProperties: false,
+  required: ["schema_version", "verdict", "signal"],
+  $defs: {
+    featureName: { enum: ["last_price", "ret_60m_pct", "atr_14_pct"] },
+    leaf: {
+      type: "object",
+      additionalProperties: false,
+      required: ["feature", "op", "value"],
+      properties: {
+        feature: { $ref: "#/$defs/featureName" },
+        op: { enum: ["lt", "gt"] },
+        value: { oneOf: [{ type: "number" }, { type: "object", required: ["feature"], properties: { feature: { $ref: "#/$defs/featureName" } } }] },
+      },
+    },
+    predicate: {
+      oneOf: [
+        { $ref: "#/$defs/leaf" },
+        { type: "object", required: ["all"], properties: { all: { type: "array", minItems: 1, items: { $ref: "#/$defs/predicate" } } } },
+        { type: "object", required: ["not"], properties: { not: { $ref: "#/$defs/predicate" } } },
+      ],
+    },
   },
+  properties: {
+    schema_version: { const: "1.0.0" },
+    verdict: { enum: ["summary_only", "forecast_expressible"] },
+    signal: {
+      oneOf: [
+        { type: "null" },
+        { type: "object", required: ["direction", "entry"], properties: { direction: { const: "long" }, entry: { $ref: "#/$defs/predicate" } } },
+      ],
+    },
+  },
+  allOf: [{ if: { properties: { verdict: { const: "summary_only" } } }, then: { properties: { signal: { type: "null" } } } }],
 });
 
-export type TradingPosition = InferFormat<typeof TradingPositionFormat>;
-// { id: number; symbol: string; position: "long" | "short" | "wait"; targets: number[]; stoploss: number; reasoning?: string }
+export type Agent1Response = InferFormat<typeof Agent1Format>;
+// { schema_version: "1.0.0"; verdict: "summary_only" | "forecast_expressible"; signal: null | { direction: "long"; entry: Predicate } }
 
-const entry = await generateObject({ messages, format: TradingPositionFormat });
-if (entry.position !== "wait") { /* entry.position is "long" | "short" here */ }
+const answer = await generateObject({ messages, format: Agent1Format });
+if (answer.signal) answer.signal.entry; // Leaf | { all: Predicate[] } | { not: Predicate }
 ```
 
 A schema written for json-inference (`satisfies FormatModel`, no `defineFormat`) still works: enums widen to `string` and every property is required, exactly as json-inference infers it.
+
+The server rejects a schema that does not compile (a `$ref` to a missing `$defs` entry) with HTTP 400 and `error.code = "invalid_format"`; `generateObject` throws `AgentRuntimeError` with that code and no inference is recorded.
 
 ## Text answers
 
@@ -154,6 +189,7 @@ if (response.status === "success") {
   response.turns;       // model calls
 } else {
   response.error.code;    // "schema_mismatch" | "empty_answer" | "max_turns" | "timeout" | "provider_error" | "internal_error"
+                          // ("invalid_format" only ever arrives as a thrown AgentRuntimeError with status 400)
   response.error.details; // one line per failed attempt
   response.id;            // look the transcript up in the admin UI
 }
@@ -167,7 +203,7 @@ try {
 } catch (error) {
   if (error instanceof AgentRuntimeError) {
     error.status;      // HTTP status, 0 for network failures
-    error.code;        // InferenceErrorCode or null for non-agent errors (400, 404, …)
+    error.code;        // InferenceErrorCode ("invalid_format" for a rejected schema) or null for other HTTP errors
     error.details;     // per-attempt details
     error.inferenceId; // id of the stored run
   }
@@ -225,7 +261,7 @@ Client:
 | `getInference(id)` | `Promise<InferenceRecord>` |
 | `getAttachment(id, attachmentId)` | `Promise<Attachment>` |
 | `deleteInference(id)` | `Promise<{ ok: boolean }>` |
-| `defineFormat(schema)` | the schema with literal types preserved |
+| `defineFormat(schema)` | the schema with literal types preserved (the only way to declare a format: no separate answer type) |
 | `encodeFile(name, bytes \| string)`, `encodeImage(bytes)`, `userMessage(text, images?)` | request helpers |
 
 `params`: `messages` (`{ role, content, images? }[]`), `files?` (`{ name, content }[]`), `format` (object mode), `model?`, `instructions?`. `options`: `signal?`, `headers?`.

@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "article": {
+    "url": "https://example.invalid/obzor-rynka-kriptovalyut-15-05-2026",
+    "published_at": null,
+    "data_timestamp_present": true,
+    "data_asof_note": "данные по состоянию на 09:00 UTC"
+  },
+  "verdict": "forecast_expressible",
+  "claims": [
+    {
+      "id": "c1",
+      "evidence_quote": "закрепление выше 84 900 откроет дорогу к 88 000 в течение ближайших суток",
+      "kind": "forward_directional",
+      "asset": "BTC",
+      "direction": "up",
+      "falsifiable": true,
+      "expressible_on_target": true,
+      "inexpressible_reason": null
+    },
+    {
+      "id": "c2",
+      "evidence_quote": "уход цены ниже 82 000 отменяет сценарий роста",
+      "kind": "forward_directional",
+      "asset": "BTC",
+      "direction": "down",
+      "falsifiable": true,
+      "expressible_on_target": true,
+      "inexpressible_reason": null
+    },
+    {
+      "id": "c3",
+      "evidence_quote": "Сохраняйте взвешенный подход к новым позициям",
+      "kind": "advice_generic",
+      "asset": "MARKET",
+      "direction": "none",
+      "falsifiable": false,
+      "expressible_on_target": false,
+      "inexpressible_reason": "универсальный совет без наблюдаемого условия"
+    }
+  ],
+  "signal": {
+    "direction": "long",
+    "asset": "BTC",
+    "based_on_claim_ids": ["c1"],
+    "entry": { "feature": "last_price", "op": "crosses_above", "value": 84900 },
+    "invalidation": { "feature": "last_price", "op": "lt", "value": 82000 },
+    "hard_stop": { "mode": "atr_multiple", "value": 2.0 },
+    "max_holding_periods": 6,
+    "ttl_hours": 24,
+    "confidence": "medium",
+    "rationale": "Автор называет явный уровень активации 84 900 и уровень отмены 82 000, прогноз направлен вверх и выразим на свечах BTC."
+  },
+  "data_quality_flags": ["no_publication_time"]
+}

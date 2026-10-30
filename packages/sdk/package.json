@@ -1,7 +1,7 @@
 {
   "name": "agent-runtime-sdk",
-  "version": "0.1.0",
-  "description": "Strictly typed Node.js client for agent-runtime over the fetch API: generateObject() with return types inferred from the JSON schema, generateText(), and the admin API.",
+  "version": "0.2.0",
+  "description": "Strictly typed Node.js client for agent-runtime over the fetch API: generateObject() with return types inferred from a full JSON Schema (oneOf, const, $ref, nullable), generateText(), and the admin API.",
   "keywords": [
     "agent-runtime",
     "sdk",

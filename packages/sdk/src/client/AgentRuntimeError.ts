@@ -1,4 +1,4 @@
-import type { InferenceError, InferenceFailure } from "../model/Api.model.js";
+import type { InferenceError, InferenceErrorCode, InferenceFailure } from "../model/Api.model.js";
 
 /**
  * Thrown by the client for any HTTP failure. When the server answered with an
@@ -9,18 +9,20 @@ export class AgentRuntimeError extends Error {
   public readonly status: number;
   public readonly body: unknown;
   public readonly failure: InferenceFailure | null;
+  private readonly explicitCode: InferenceErrorCode | null;
 
-  constructor(message: string, status: number, body: unknown, failure: InferenceFailure | null = null) {
+  constructor(message: string, status: number, body: unknown, failure: InferenceFailure | null = null, code: InferenceErrorCode | null = null) {
     super(message);
     this.name = "AgentRuntimeError";
     this.status = status;
     this.body = body;
     this.failure = failure;
+    this.explicitCode = code;
   }
 
-  /** InferenceErrorCode when the server returned a typed failure, otherwise null. */
+  /** InferenceErrorCode when the server returned a typed failure or rejected the schema (`invalid_format`), otherwise null. */
   public get code(): InferenceError["code"] | null {
-    return this.failure?.error.code ?? null;
+    return this.explicitCode ?? this.failure?.error.code ?? null;
   }
 
   /** Per-attempt details when the server returned a typed failure. */
@@ -39,3 +41,10 @@ export const isInferenceFailure = (value: unknown): value is InferenceFailure =>
   value !== null &&
   (value as { status?: unknown }).status === "error" &&
   typeof (value as { error?: { code?: unknown } }).error?.code === "string";
+
+/** Body of a 400 returned when `format` is not a valid JSON Schema. */
+export const isInvalidFormat = (value: unknown): value is { status: "error"; error: InferenceError } =>
+  typeof value === "object" &&
+  value !== null &&
+  (value as { status?: unknown }).status === "error" &&
+  (value as { error?: { code?: unknown } }).error?.code === "invalid_format";

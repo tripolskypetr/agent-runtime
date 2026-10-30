@@ -3,7 +3,6 @@ import Mustache from "mustache";
 
 import { CONFIG } from "../config.js";
 import { getLogger } from "../lib/logger.js";
-import type { FormatModel } from "../model/Format.model.js";
 
 const log = getLogger("systemPrompt");
 import type { InferenceMode } from "../model/Inference.model.js";
@@ -13,7 +12,8 @@ export interface SystemPromptInput {
   workspace: string;
   files: { path: string; size: number }[];
   images: { path: string; size: number; messageIndex: number }[];
-  schema?: FormatModel;
+  /** Model-facing schema (see toModelSchema), already trimmed. */
+  schema?: Record<string, unknown>;
   vision: boolean;
   instructions?: string;
 }

@@ -74,6 +74,31 @@ const viaDefault = await generateText({ messages: [{ role: "user", content: "Ans
 check("generateText() function without config (AGENT_RUNTIME_URL)", /blue/i.test(viaDefault), viaDefault);
 delete process.env.AGENT_RUNTIME_URL;
 
+const SignalFormat = defineFormat({
+  type: "object",
+  additionalProperties: false,
+  required: ["verdict", "published_at", "signal"],
+  properties: {
+    verdict: { enum: ["summary_only", "forecast_expressible"], description: "summary_only when there is no forecast" },
+    published_at: { type: ["string", "null"], description: "ISO-8601 or null when the text has no time" },
+    signal: { oneOf: [{ type: "null" }, { type: "object", required: ["direction"], properties: { direction: { const: "long" } } }] },
+  },
+  allOf: [{ if: { properties: { verdict: { const: "summary_only" } }, required: ["verdict"] }, then: { properties: { signal: { type: "null" } } } }],
+});
+const roundTrip = await generateObject(
+  { messages: [{ role: "user", content: "Text: 'Investors are cautious; the market is balanced.' No forecast, no publication time." }], format: SignalFormat },
+  { baseUrl },
+);
+check("nullable + oneOf round trip (verdict summary_only, signal null, published_at null)", roundTrip.verdict === "summary_only" && roundTrip.signal === null && roundTrip.published_at === null, roundTrip);
+
+let invalidFormat = null;
+try {
+  await generateObject({ messages: [{ role: "user", content: "hi" }], format: { type: "object", required: ["x"], properties: { x: { $ref: "#/$defs/missing" } } } }, { baseUrl });
+} catch (error) {
+  invalidFormat = error;
+}
+check("invalid $ref → AgentRuntimeError 400 invalid_format", invalidFormat instanceof AgentRuntimeError && invalidFormat.status === 400 && invalidFormat.code === "invalid_format", invalidFormat && { status: invalidFormat.status, code: invalidFormat.code, message: invalidFormat.message });
+
 const list = await client.listInferences({ limit: 5, mode: "object" });
 check("listInferences()", list.total >= 1 && list.items.every((item) => item.mode === "object"), { total: list.total, first: list.items[0]?.id });
 

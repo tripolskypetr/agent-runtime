@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "article": {
+    "url": "https://eraperemen.info/obzor-rynka-kriptovalyut-22-10-2026",
+    "published_at": null,
+    "data_timestamp_present": true,
+    "data_asof_note": "цена BTC по состоянию на 07:20 Europe/Istanbul"
+  },
+  "verdict": "forecast_not_expressible",
+  "claims": [
+    {
+      "id": "c1",
+      "evidence_quote": "Продолжающиеся оттоки из Ethereum-ETF и замедление притока в Bitcoin-ETF увеличивают вероятность дальнейшей коррекции в ETH и альткоинах.",
+      "kind": "forward_directional",
+      "asset": "ETH",
+      "direction": "down",
+      "falsifiable": true,
+      "expressible_on_target": false,
+      "inexpressible_reason": "относится к ETH и альткоинам, не к BTC; опирается на потоки в ETF, отсутствующие в свечах"
+    },
+    {
+      "id": "c2",
+      "evidence_quote": "Аналитики отмечают, что уровень $82 500 становится ключевым для краткосрочных сценариев.",
+      "kind": "state_description",
+      "asset": "BTC",
+      "direction": "none",
+      "falsifiable": false,
+      "expressible_on_target": true,
+      "inexpressible_reason": null
+    },
+    {
+      "id": "c3",
+      "evidence_quote": "Волатильность биткоина приближается к минимальным значениям 2026 года, что отражает осторожность участников рынка перед ключевыми макроэкономическими событиями.",
+      "kind": "state_description",
+      "asset": "BTC",
+      "direction": "none",
+      "falsifiable": true,
+      "expressible_on_target": true,
+      "inexpressible_reason": null
+    },
+    {
+      "id": "c4",
+      "evidence_quote": "Технологические обновления в Solana и Dogecoin могут стать драйвером для роста в среднесрочной перспективе, однако краткосрочно сектор под давлением коррекции и регуляторных новостей.",
+      "kind": "forward_hedged",
+      "asset": "ALTS",
+      "direction": "up",
+      "falsifiable": false,
+      "expressible_on_target": false,
+      "inexpressible_reason": "модальная конструкция, покрывающая оба направления; не про BTC"
+    },
+    {
+      "id": "c5",
+      "evidence_quote": "указывает на целесообразность осторожного подхода к новым позициям",
+      "kind": "advice_generic",
+      "asset": "MARKET",
+      "direction": "none",
+      "falsifiable": false,
+      "expressible_on_target": false,
+      "inexpressible_reason": "универсальный совет без наблюдаемого условия"
+    },
+    {
+      "id": "c6",
+      "evidence_quote": "Новый регламент вступит в силу в середине января 2027 года и охватывает вопросы резервирования и выкупа стейблкоинов.",
+      "kind": "dated_event",
+      "asset": "OTHER",
+      "direction": "none",
+      "falsifiable": true,
+      "expressible_on_target": false,
+      "inexpressible_reason": "регуляторная дата, не наблюдаема в свечах"
+    }
+  ],
+  "signal": null,
+  "data_quality_flags": [
+    "no_publication_time",
+    "number_reused_across_contexts",
+    "logical_incoherence",
+    "source_dates_precede_publication"
+  ]
+}

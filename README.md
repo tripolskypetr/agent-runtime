@@ -28,7 +28,7 @@ Harness rules:
 2. If the model answers with text instead of calling `provide_answer`, a user message demanding the tool call is appended and the model is prompted again on the same conversation, up to `MAX_ATTEMPTS` times.
 3. Inferences run one at a time (shared workspace); callers queue.
 4. Every inference, successful or failed, is stored in SQLite with the full transcript, request files, images, images viewed by tools and files the agent produced.
-5. A failed inference returns HTTP 500 with a JSON error (`schema_mismatch`, `empty_answer`, `max_turns`, `timeout`, `provider_error`, `internal_error`).
+5. A failed inference returns HTTP 500 with a JSON error (`schema_mismatch`, `empty_answer`, `max_turns`, `timeout`, `provider_error`, `internal_error`); an invalid `format` returns HTTP 400 (`invalid_format`).
 
 ## Quick start (Docker)
 
@@ -88,6 +88,12 @@ Failure (500):
 
 Malformed requests are rejected with 400 before an inference is created.
 
+**`format` is a JSON Schema (draft 2020-12)** with an object at the top level (`type: "object"`, `required`, `properties`). It becomes the parameters of the `provide_answer` tool and every call is validated by [ajv](https://ajv.js.org/), so all of these are enforced: `oneOf` / `anyOf` / `allOf` / `not`, `const`, `enum` (any JSON values, `null` included), `if` / `then` / `else`, local `$ref` into `$defs` (recursive schemas work), `additionalProperties: false`, `pattern`, `minLength` / `maxLength`, `minimum` / `maximum` / `exclusiveMinimum`, `minItems` / `maxItems`, nullable types written as `type: ["string", "null"]`, `format` (date-time, uri, …). json-inference `FormatModel` schemas are a subset and work unchanged. `$schema` and `$id` are ignored and external references are not resolved; a schema that does not compile (a `$ref` to a missing `$defs` entry, a wrong keyword value) is answered with 400 and `error.code = "invalid_format"` before anything runs.
+
+A rejected `provide_answer` call gets the violations back as short dotted paths, deepest first, e.g. `signal.direction: must be exactly "long"; claims[0].id: must match pattern ^c[0-9]{1,2}$`, and the model is re-prompted on the same conversation.
+
+The model does not see the schema verbatim: `$schema`, `$id`, `title`, `examples` and `$defs` are removed and local `$ref`s are inlined up to `MODEL_SCHEMA_REF_DEPTH` levels (default 3; deeper references are replaced by a one-line description, `0` passes `$ref` / `$defs` through as written). Validation always uses the original schema.
+
 ### `POST /api/v1/text`
 
 The `generateText` counterpart: the same `messages`, `files`, `model` and `instructions`, no `format`. The agent still has `bash` and `view_image`; the text of its final message is returned as is.
@@ -102,7 +108,7 @@ The `generateText` counterpart: the same `messages`, `files`, `model` and `instr
 
 If the model finishes without text it is asked again up to `MAX_ATTEMPTS` times, then a 500 with code `empty_answer` is returned. Text runs are stored like the others and marked `mode: "text"` in the admin UI and in `GET /api/v1/inferences?mode=text`.
 
-**Long requests.** The response is sent only when the agent finishes, which can take minutes (several model turns, bash commands, retries). Use an HTTP client without a response timeout: Node's `fetch` gives up after 300 s by default, so call it with an `undici` `Agent({ headersTimeout: 0, bodyTimeout: 0 })` or use `node:http` as [scripts/smoke.ts](scripts/smoke.ts) does. The server itself has no request timeout; `INFERENCE_TIMEOUT_MS` bounds the agent. Model calls go to Ollama as streaming requests, so slow models do not hit the same 300 s limit inside the harness.
+**Long requests.** The response is sent only when the agent finishes, which can take minutes (several model turns, bash commands, retries). Use an HTTP client without a response timeout: Node's `fetch` gives up after 300 s by default, so call it with an `undici` `Agent({ headersTimeout: 0, bodyTimeout: 0 })` or use `node:http` as [demo/smoke.ts](demo/smoke.ts) does. The server itself has no request timeout; `INFERENCE_TIMEOUT_MS` bounds the agent. Model calls go to Ollama as streaming requests, so slow models do not hit the same 300 s limit inside the harness.
 
 ### Admin API
 
@@ -190,6 +196,8 @@ npm install
 cp config/.env.example .env     # fill OLLAMA_API_KEY
 npm run dev                     # tsx watch
 npm run smoke                   # end-to-end test against BASE_URL (default http://localhost:10050)
+npm run test:schema             # validator + model-schema tests on the AGENT.md schemas (no model needed)
+npm run smoke:schema            # JSON Schema keywords end to end on the configured model
 SMOKE_JSONL=../backtest-news-claims/assets/wwwroot.jsonl npm run smoke   # also runs a real record with photos
 ```
 

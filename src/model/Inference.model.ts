@@ -39,6 +39,7 @@ export interface TextRequest {
 export type InferenceStatus = "running" | "success" | "error";
 
 export type InferenceErrorCode =
+  | "invalid_format"
   | "schema_mismatch"
   | "empty_answer"
   | "max_turns"

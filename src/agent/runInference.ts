@@ -6,6 +6,7 @@ import { CONFIG } from "../config.js";
 import type { Database } from "../db/database.js";
 import { createImageSink, externalizeImages } from "../helpers/history.js";
 import { decodeImage, extensionByMime, guessFileMime, sha256, stripDataUrl } from "../helpers/images.js";
+import { describeFormat } from "../helpers/schema.js";
 import { getLogger, preview, since, type ScopedLogger } from "../lib/logger.js";
 import type { InferenceError, InferenceMode, InferenceRequest, StoredRequest, TextRequest } from "../model/Inference.model.js";
 import { createOllamaModel, createOllamaStreamFn, defaultOllamaOptions, OLLAMA_API, OLLAMA_PROVIDER } from "./ollama.js";
@@ -65,7 +66,8 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
     messages: request.messages.length,
     images: request.messages.reduce((sum, m) => sum + (m.images?.length ?? 0), 0),
     files: (request.files ?? []).map((f) => ({ name: f.name, base64Length: f.content.length })),
-    format: format ? { required: format.required, properties: Object.keys(format.properties) } : null,
+    format: format ? describeFormat(format as unknown as Record<string, unknown>) : null,
+    modelSchemaRefDepth: CONFIG.MODEL_SCHEMA_REF_DEPTH,
     instructions: preview(request.instructions),
     limits: { maxAttempts: CONFIG.MAX_ATTEMPTS, maxTurns: CONFIG.MAX_TURNS, timeoutMs: CONFIG.INFERENCE_TIMEOUT_MS },
   });
@@ -200,17 +202,17 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
     log.debug("workspace ready", { files: fileList, images: imageList, workspace: workspace.root });
 
     // 2. Agent with the three tools.
+    const provide = format ? createProvideAnswerTool(format, log) : null;
     const systemPrompt = await renderSystemPrompt({
       mode,
       workspace: workspace.root,
       files: fileList,
       images: imageList,
-      schema: format,
+      schema: provide?.modelSchema,
       vision,
       instructions: extraInstructions.join("\n\n") || undefined,
     });
     log.debug("system prompt rendered", { length: systemPrompt.length, prompt: systemPrompt });
-    const provide = format ? createProvideAnswerTool(format, log) : null;
     const model = createOllamaModel(modelName, vision, ollamaOptions);
     const tools = [
       ...(provide ? [provide.tool] : []),
@@ -229,7 +231,10 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
         thinkingLevel: "off",
         tools,
       },
-      streamFn: createOllamaStreamFn(ollamaOptions, log),
+      streamFn: createOllamaStreamFn(
+        { ...ollamaOptions, ...(provide ? { toolParameters: { [PROVIDE_ANSWER_TOOL]: provide.modelSchema } } : {}) },
+        log,
+      ),
       toolExecution: "sequential",
       beforeToolCall: async ({ toolCall }) => {
         if (provide?.hasAnswer) {

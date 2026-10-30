@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { CONFIG } from "../config.js";
 import type { Database } from "../db/database.js";
 import { getLogger, preview, since } from "../lib/logger.js";
+import { compileFormat, InvalidFormatError } from "../helpers/schema.js";
 import type { SerialQueue } from "../agent/queue.js";
 import { runInference } from "../agent/runInference.js";
 import { Workspace } from "../agent/workspace.js";
@@ -28,6 +29,17 @@ const handle = async (
   const modelName = body.model?.trim() || CONFIG.OLLAMA_MODEL;
   const received = Date.now();
   const log = getLogger("inference").child(id);
+  if ("format" in body && body.format) {
+    try {
+      compileFormat(body.format as unknown as Record<string, unknown>);
+    } catch (error) {
+      if (error instanceof InvalidFormatError) {
+        log.warn("request rejected: invalid format", { route: request.url, message: error.message });
+        return reply.code(400).send({ status: "error", error: { code: "invalid_format", message: error.message, details: [] } });
+      }
+      throw error;
+    }
+  }
   request.log.info({ inference: id, mode }, "inference accepted");
   log.info("request received", {
     mode,
@@ -87,13 +99,15 @@ export const registerInferenceRoutes = (app: FastifyInstance, deps: InferenceDep
         summary: "Run the agent and return a structured answer (generateObject)",
         description:
           "Writes the request files and images into the data workspace, runs the agent (bash, view_image, provide_answer) " +
-          "on Ollama and returns the provide_answer arguments validated against `format`. " +
+          "on Ollama and returns the provide_answer arguments validated against `format` (JSON Schema draft 2020-12, see FormatModel). " +
+          "A schema that does not compile (e.g. a `$ref` to a missing `$defs` entry) is rejected with 400 `invalid_format` before anything runs. " +
           "Inferences are executed one at a time; the workspace is wiped before and after each one. " +
           "A 500 with an InferenceFailure body is returned when the model did not produce a valid answer; " +
           "every run, successful or not, is stored and visible in the admin UI.",
         body: { $ref: "InferenceRequest#" },
         response: {
           200: { $ref: "InferenceSuccess#" },
+          400: { $ref: "InvalidFormat#" },
           500: { $ref: "InferenceFailure#" },
         },
       },

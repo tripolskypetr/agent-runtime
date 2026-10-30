@@ -10,7 +10,7 @@ import type {
   TextParams,
   TextResponse,
 } from "../model/Api.model.js";
-import { AgentRuntimeError, isInferenceFailure } from "./AgentRuntimeError.js";
+import { AgentRuntimeError, isInferenceFailure, isInvalidFormat } from "./AgentRuntimeError.js";
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -145,6 +145,10 @@ export class AgentRuntimeClient {
     const payload = await parseBody(response);
     if (response.ok) return payload as T;
     if (response.status === 500 && isInferenceFailure(payload)) return payload as T;
+    // 400 invalid_format: the schema itself was rejected before any inference ran
+    if (isInvalidFormat(payload)) {
+      throw new AgentRuntimeError(`${payload.error.code}: ${payload.error.message}`, response.status, payload, null, payload.error.code);
+    }
     throw new AgentRuntimeError(describe(response.status, payload), response.status, payload);
   }
 

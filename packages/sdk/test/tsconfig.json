@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "paths": { "agent-runtime-sdk": ["../types.d.ts"] }
   },
-  "include": ["./typecheck.ts"]
+  "include": ["./typecheck.ts", "./agent1.format.ts"]
 }

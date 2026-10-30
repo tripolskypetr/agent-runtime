@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "article": {
+    "url": "https://eraperemen.info/obzor-rynka-kriptovalyut-23-10-2026",
+    "published_at": null,
+    "data_timestamp_present": false,
+    "data_asof_note": "дата данных 2026-10-23, время снимка не указано"
+  },
+  "verdict": "summary_only",
+  "claims": [
+    {
+      "id": "c1",
+      "evidence_quote": "Приток $1.08 млрд за три дня поддерживает спрос на BTC и может способствовать стабилизации рынка.",
+      "kind": "forward_hedged",
+      "asset": "BTC",
+      "direction": "up",
+      "falsifiable": false,
+      "expressible_on_target": false,
+      "inexpressible_reason": "модальная конструкция без порога; опирается на потоки в ETF, которых нет в свечах"
+    },
+    {
+      "id": "c2",
+      "evidence_quote": "Давление на фондовые рынки и рост цен на нефть могут усилить отток капитала из рисковых активов, включая криптовалюты.",
+      "kind": "forward_hedged",
+      "asset": "MARKET",
+      "direction": "down",
+      "falsifiable": false,
+      "expressible_on_target": false,
+      "inexpressible_reason": "модальная конструкция; опирается на внешние рынки и нефть"
+    },
+    {
+      "id": "c3",
+      "evidence_quote": "Рынок перешёл в фазу осторожного баланса",
+      "kind": "state_description",
+      "asset": "MARKET",
+      "direction": "none",
+      "falsifiable": false,
+      "expressible_on_target": false,
+      "inexpressible_reason": "неоперациональная формулировка без измеримого определения"
+    },
+    {
+      "id": "c4",
+      "evidence_quote": "который начнёт торговаться на SIX Swiss Exchange в ноябре",
+      "kind": "dated_event",
+      "asset": "OTHER",
+      "direction": "none",
+      "falsifiable": true,
+      "expressible_on_target": false,
+      "inexpressible_reason": "событие календаря, не наблюдаемо в свечах BTC"
+    }
+  ],
+  "signal": null,
+  "data_quality_flags": [
+    "no_publication_time",
+    "no_data_snapshot_time",
+    "internal_numeric_inconsistency",
+    "source_dates_precede_publication"
+  ]
+}

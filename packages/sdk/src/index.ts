@@ -8,7 +8,16 @@ export type { ClientOptions, FetchLike, RequestOptions } from "./client/AgentRun
 export { AgentRuntimeError, isInferenceFailure } from "./client/AgentRuntimeError.js";
 
 export { defineFormat } from "./model/Format.model.js";
-export type { FormatItems, FormatModel, FormatProperty, InferFormat, InferProperty } from "./model/Format.model.js";
+export type {
+  DefaultRefDepth,
+  FormatItems,
+  FormatModel,
+  FormatProperty,
+  InferFormat,
+  InferProperty,
+  JsonSchema,
+  JsonSchemaType,
+} from "./model/Format.model.js";
 
 export type {
   Attachment,

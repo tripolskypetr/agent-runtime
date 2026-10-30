@@ -3,7 +3,12 @@
 export const formatSchema = {
   $id: "FormatModel",
   type: "object",
-  description: "JSON schema of the expected answer (json-inference FormatModel). Becomes the parameters of the provide_answer tool.",
+  description:
+    "JSON Schema (draft 2020-12) of the expected answer; the top level must be an object with `required` and `properties`. " +
+    "Becomes the parameters of the provide_answer tool and is enforced by ajv on every call: oneOf/anyOf/allOf/not, const, enum, " +
+    "if/then/else, local `$ref` into `$defs`, additionalProperties, pattern, minLength/maxLength, minimum/maximum, nullable types " +
+    "(`type: [\"string\", \"null\"]`). json-inference FormatModel schemas are a subset and work unchanged. `$id`/`$schema` are ignored, " +
+    "external references are not resolved. The model sees a trimmed copy: meta keywords removed, `$ref`s inlined to MODEL_SCHEMA_REF_DEPTH.",
   required: ["type", "required", "properties"],
   properties: {
     type: { type: "string", enum: ["object"] },
@@ -94,7 +99,7 @@ export const inferenceErrorSchema = {
   type: "object",
   required: ["code", "message", "details"],
   properties: {
-    code: { type: "string", enum: ["schema_mismatch", "empty_answer", "max_turns", "timeout", "provider_error", "internal_error"] },
+    code: { type: "string", enum: ["invalid_format", "schema_mismatch", "empty_answer", "max_turns", "timeout", "provider_error", "internal_error"] },
     message: { type: "string" },
     details: { type: "array", items: { type: "string" } },
   },
@@ -154,6 +159,21 @@ export const textSuccessSchema = {
     attempts: 1,
     turns: 2,
     durationMs: 2140,
+  },
+} as const;
+
+export const invalidFormatSchema = {
+  $id: "InvalidFormat",
+  type: "object",
+  description: "Returned with HTTP 400 when `format` is not a valid JSON Schema; no inference is created.",
+  required: ["status", "error"],
+  properties: {
+    status: { type: "string", enum: ["error"] },
+    error: { $ref: "InferenceError#" },
+  },
+  example: {
+    status: "error",
+    error: { code: "invalid_format", message: "Invalid format schema: can't resolve reference #/$defs/predicate from id #", details: [] },
   },
 } as const;
 
@@ -255,6 +275,7 @@ export const sharedSchemas = [
   inferenceErrorSchema,
   inferenceSuccessSchema,
   textSuccessSchema,
+  invalidFormatSchema,
   inferenceFailureSchema,
   attachmentMetaSchema,
   inferenceSummarySchema,

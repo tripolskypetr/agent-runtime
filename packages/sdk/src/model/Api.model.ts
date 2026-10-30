@@ -41,6 +41,7 @@ export interface TextParams extends BaseParams {}
 /* --------------------------------------------------------------- responses */
 
 export type InferenceErrorCode =
+  | "invalid_format"
   | "schema_mismatch"
   | "empty_answer"
   | "max_turns"

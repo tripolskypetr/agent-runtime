@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/agent3.response.schema.json",
+  "title": "Agent3Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evaluated_at",
+    "position",
+    "exit_checks",
+    "decision"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "evaluated_at": {
+      "type": "string"
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signal_id",
+        "opened_at",
+        "entry_price",
+        "last_price",
+        "unrealized_pct",
+        "periods_held",
+        "max_holding_periods",
+        "exchange_stop_order_id"
+      ],
+      "properties": {
+        "signal_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "opened_at": {
+          "type": "string"
+        },
+        "entry_price": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "last_price": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unrealized_pct": {
+          "type": "number"
+        },
+        "periods_held": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_holding_periods": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "exchange_stop_order_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "exit_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hard_stop_hit",
+        "time_stop_hit",
+        "invalidation_result",
+        "entry_condition_still_true",
+        "leaf_results"
+      ],
+      "properties": {
+        "hard_stop_hit": {
+          "type": "boolean"
+        },
+        "time_stop_hit": {
+          "type": "boolean"
+        },
+        "invalidation_result": {
+          "type": "boolean"
+        },
+        "entry_condition_still_true": {
+          "type": "boolean",
+          "description": "справочно, в решении НЕ участвует: отрицание входа не является выходом"
+        },
+        "leaf_results": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "feature",
+              "op",
+              "value",
+              "observed",
+              "result"
+            ],
+            "properties": {
+              "feature": {
+                "type": "string"
+              },
+              "op": {
+                "type": "string"
+              },
+              "value": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "observed": {
+                "type": "number"
+              },
+              "result": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "reason",
+        "notes"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "close",
+            "hold"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "hard_stop",
+            "time_stop",
+            "invalidation",
+            "none"
+          ]
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "exit_checks": {
+                "properties": {
+                  "hard_stop_hit": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "hard_stop_hit"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "exit_checks": {
+                "properties": {
+                  "time_stop_hit": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "time_stop_hit"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "exit_checks": {
+                "properties": {
+                  "invalidation_result": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "invalidation_result"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "action": {
+                "const": "close"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "action": {
+                "const": "hold"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "reason": {
+                "const": "none"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "action": {
+                "const": "close"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "reason": {
+                "enum": [
+                  "hard_stop",
+                  "time_stop",
+                  "invalidation"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

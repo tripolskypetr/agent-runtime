@@ -54,6 +54,9 @@ export const CONFIG = {
   OUTPUT_FILE_MAX_BYTES: envInt("OUTPUT_FILE_MAX_BYTES", 20 * 1024 * 1024),
   OUTPUT_FILE_MAX_COUNT: envInt("OUTPUT_FILE_MAX_COUNT", 200),
 
+  /** How many levels of local $ref (into $defs) are inlined in the schema shown to the model; 0 = pass $ref/$defs through as written */
+  MODEL_SCHEMA_REF_DEPTH: envInt("MODEL_SCHEMA_REF_DEPTH", 3),
+
   /** Logging: ./logs/debug.log via pinolog; the same records echoed to stdout (LOG_CONSOLE=all|warn|off, default all so `docker logs` shows everything) */
   LOGS_ENABLED: envBool("LOGS_ENABLED", true),
   LOGS_DIR: path.resolve(root, env("LOGS_DIR", "./logs")),

@@ -42,6 +42,8 @@ export interface OllamaStreamOptions {
   numCtx?: number;
   numPredict?: number;
   temperature?: number;
+  /** Per-tool replacement of `parameters` in the request (the schema the model sees), keyed by tool name. */
+  toolParameters?: Record<string, Record<string, unknown>>;
 }
 
 /** Builds the pi Model descriptor for an Ollama model name. */
@@ -64,12 +66,12 @@ export const createOllamaClient = (options: OllamaStreamOptions): Ollama =>
     ? new Ollama({ host: options.host, headers: { Authorization: `Bearer ${options.apiKey}` } })
     : new Ollama({ host: options.host });
 
-const toOllamaTool = (tool: Tool): OllamaTool => ({
+const toOllamaTool = (tool: Tool, overrides?: Record<string, Record<string, unknown>>): OllamaTool => ({
   type: "function",
   function: {
     name: tool.name,
     description: tool.description,
-    parameters: tool.parameters as OllamaTool["function"]["parameters"],
+    parameters: (overrides?.[tool.name] ?? tool.parameters) as OllamaTool["function"]["parameters"],
   },
 });
 
@@ -200,7 +202,7 @@ export const createOllamaStreamFn = (options: OllamaStreamOptions, logger: Scope
       const onAbort = () => client.abort();
       signal?.addEventListener("abort", onAbort, { once: true });
       try {
-        const tools = getCurrentTools(context.messages).map(toOllamaTool);
+        const tools = getCurrentTools(context.messages).map((tool) => toOllamaTool(tool, options.toolParameters));
         const messages = toOllamaMessages(context.messages, vision);
         log.debug("chat request", {
           model: model.id,
