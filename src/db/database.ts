@@ -97,7 +97,7 @@ export class Database {
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     // Unicode case folding for the admin search: SQLite's LIKE and lower() fold ASCII only.
-    this.db.function("fold", { deterministic: true }, (value: unknown) => (typeof value === "string" ? value.toLowerCase() : value));
+    this.db.function("fold", { deterministic: true }, (value) => (typeof value === "string" ? value.toLowerCase() : value));
     this.db.exec(SCHEMA);
     this.migrate();
     this.recoverInterrupted();
