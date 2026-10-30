@@ -157,7 +157,7 @@ if (!process.env.SMOKE_ARTICLE_ONLY) {
   });
   const rec = r.json.id ? await fetchJson(`/api/v1/inferences/${r.json.id}`) : null;
   const failures = rec ? (rec.messages as any[]).filter((m) => m.role === "toolResult" && m.toolName === "provide_answer" && m.isError).map((m) => m.content?.map((c: any) => c.text).join("")) : [];
-  report(`if/then violation rejected, then accepted (${r.ms} ms, ${r.json.turns} turns)`, r.status === 200 && r.json.data?.signal === null && failures.some((f: string) => /signal: must be null/.test(f)), { status: r.status, data: r.json.data, validationErrors: failures });
+  report(`if/then violation rejected, then accepted (${r.ms} ms, ${r.json.turns} turns)`, r.status === 200 && r.json.turns <= 3 && failures.some((f: string) => /signal: must be null, got object \(rule: when verdict is "summary_only"\)/.test(f)), { status: r.status, data: r.json.data, validationErrors: failures });
 }
 
 /* ---- 8. $ref to a missing $defs entry → 400 invalid_format, no inference created ---- */

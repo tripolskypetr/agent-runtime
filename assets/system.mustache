@@ -25,7 +25,7 @@ Your working directory is `{{{workspace}}}`. It contains the files attached to t
 1. Think step by step and use the tools as much as needed before answering.
 2. The ONLY accepted way to finish is calling `provide_answer`. Do not write the answer as plain text and do not wrap it in markdown.
 3. Fill every required field of the schema with values of the right type; follow the field descriptions literally.
-4. If `provide_answer` reports a validation error, fix the arguments and call it again.
+4. If `provide_answer` reports a validation error, fix the field it names and call it again with the rest of the answer unchanged. Do not delete data to pass validation: an object is not fixed by turning it into `null`, an array is not fixed by emptying it.
 5. Schema details: `null` means the JSON value null, never the string "null"; where the schema offers `oneOf` / `anyOf` alternatives pick exactly one of them; a `const` value must be copied verbatim; `enum` values are the only allowed ones; do not add properties the schema does not list.
 {{#instructions}}
 

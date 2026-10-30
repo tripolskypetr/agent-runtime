@@ -42,8 +42,16 @@ const show = (value: unknown): string => JSON.stringify(value);
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const codePoints = (text: string): number => Array.from(text).length;
 
-/** Path depth of an error line, to pick the most specific branch error of a oneOf/anyOf. */
-const depthOf = (error: string): number => (error.slice(0, error.indexOf(":")).match(/[.[]/g) ?? []).length;
+/**
+ * Rank of a branch error of a oneOf/anyOf, higher is more specific: deeper path first; on equal
+ * depth a branch that matched the value's type but failed inside it ("is missing required
+ * property") beats a branch that did not even match the type ("must be null, got object").
+ */
+const rankOf = (error: string): number => {
+  const depth = (error.slice(0, error.indexOf(":")).match(/[.[]/g) ?? []).length;
+  const typeMismatch = /: must be [a-z ]+, got [a-z]+$/.test(error);
+  return depth * 2 + (typeMismatch ? 0 : 1);
+};
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
@@ -290,9 +298,9 @@ const describeCondition = (schema: any, path: string): string => {
   return parts.length ? parts.join(" and ") : `${path} matches ${show(schema).slice(0, 120)}`;
 };
 
-/** The most specific of several branch errors: the one with the deepest path (first on ties). */
+/** The most specific of several branch errors (see rankOf; first on ties). */
 const deepest = (errors: string[]): string =>
-  errors.reduce((best, error) => (depthOf(error) > depthOf(best) ? error : best), errors[0] ?? "does not match the schema");
+  errors.reduce((best, error) => (rankOf(error) > rankOf(best) ? error : best), errors[0] ?? "does not match the schema");
 
 export const validateToolArguments = <T = any>(parsedArguments: unknown, schema: FormatModel): ValidationResult<T> => {
   if (parsedArguments == null) {

@@ -93,6 +93,9 @@ check("nullable: the string \"null\" is still a valid string (prompt rule 5 cove
 check("nullable: published_at null ok", validateToolArguments({ ...fixtureA, article: { ...fixtureA.article, published_at: null } }, agent1).success);
 reject("nullable: published_at number", agent1, { ...fixtureA, article: { ...fixtureA.article, published_at: 5 } }, /article\.published_at: must be string or null/);
 reject("oneOf: signal is a string", agent1, withSignal("none"), /^Invalid arguments: signal: must be (null|object)/);
+const { rationale: _r, ...signalWithoutRationale } = goodSignal;
+reject("oneOf: missing property inside the object branch names the property, not the null branch", agent1, withSignal(signalWithoutRationale), /^Invalid arguments: signal: is missing required property "rationale"$/);
+reject("oneOf: wrong type inside the object branch", agent1, withSignal({ ...goodSignal, ttl_hours: "24" }), /^Invalid arguments: signal\.ttl_hours: must be number, got string$/);
 reject("if/then: summary_only with signal object", agent1, withSignal(goodSignal, "summary_only"), /^Invalid arguments: signal: must be null, got object \(rule: when verdict is one of \["summary_only","forecast_not_expressible"\]\)$/);
 reject("if/then: forecast_expressible with signal null", agent1, withSignal(null, "forecast_expressible"), /^Invalid arguments: signal: must be object, got null \(rule: when verdict is "forecast_expressible"\)$/);
 reject("enum: unknown feature (deepest branch error of the oneOf)", agent1, withSignal({ ...goodSignal, entry: { feature: "rsi_14", op: "gt", value: 1 } }), /^Invalid arguments: signal\.entry\.feature: must be one of \["last_price"/);

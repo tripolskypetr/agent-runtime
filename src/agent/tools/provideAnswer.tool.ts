@@ -62,7 +62,7 @@ export const createProvideAnswerTool = (schema: FormatModel, logger: ScopedLogge
       if (!validation.success) {
         failures.push(validation.error ?? "Validation failed");
         log.warn("answer rejected", { toolCallId, error: validation.error, arguments: params, failuresSoFar: failures.length });
-        throw new Error(`${validation.error}. Fix the arguments and call ${PROVIDE_ANSWER_TOOL} again.`);
+        throw new Error(`${validation.error}. Fix this field, keep the rest of the answer as it is, and call ${PROVIDE_ANSWER_TOOL} again.`);
       }
       answer = validation.data;
       hasAnswer = true;
