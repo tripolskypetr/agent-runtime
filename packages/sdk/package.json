@@ -41,7 +41,8 @@
   },
   "scripts": {
     "build": "rollup -c",
-    "test": "npm run build && tsc -p test/tsconfig.json && node test/test.mjs"
+    "test": "npm run build && tsc -p test/tsconfig.json && node test/validate.mjs && node test/test.mjs",
+    "test:validate": "node test/validate.mjs"
   },
   "main": "build/index.cjs",
   "module": "build/index.mjs",

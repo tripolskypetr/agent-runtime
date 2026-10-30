@@ -150,6 +150,29 @@ A schema written for json-inference (`satisfies FormatModel`, no `defineFormat`)
 
 The server rejects a schema that does not compile (a `$ref` to a missing `$defs` entry) with HTTP 400 and `error.code = "invalid_format"`; `generateObject` throws `AgentRuntimeError` with that code and no inference is recorded.
 
+## Client-side validation and retries
+
+The package ships the server's answer validator ([src/validation/validateToolArguments.ts](src/validation/validateToolArguments.ts): a dependency-free JSON Schema checker, the same file byte for byte on both sides). The client uses it on every successful answer, and when the answer does not match `format` it runs the inference again, up to `maxAttempts` (3) times in total, then fails with `schema_mismatch` and one detail line per rejected inference. This should never trigger against a current server, which validates with the same code; it is the client's guarantee that the value you get really has the inferred type (older server, proxy that rewrote the body, ...).
+
+```typescript
+const client = createClient({ validateAnswer: true, maxAttempts: 3 }); // defaults
+await generateObject(params, { validateAnswer: false });               // trust the server, no retries
+```
+
+The validator is also exported for answers that come from somewhere else, e.g. a cache on disk after a schema change:
+
+```typescript
+import { validateAnswer, assertAnswer } from "agent-runtime-sdk";
+
+const result = validateAnswer(JSON.parse(cached), Agent1Format);
+if (result.success) result.data.verdict;      // typed as Agent1Response
+else console.warn(result.error);              // "Invalid arguments: signal.direction: must be exactly \"long\""
+
+const answer = assertAnswer(JSON.parse(cached), Agent1Format); // throws instead
+```
+
+Supported keywords: `type` (string or array, `null` included), `enum`, `const`, `oneOf` / `anyOf` / `allOf` / `not`, `if` / `then` / `else`, local `$ref`, `properties` / `required` / `additionalProperties` / `patternProperties` / `propertyNames` / `dependentRequired` / `dependentSchemas` / `minProperties` / `maxProperties`, `items` / `prefixItems` / `contains` / `uniqueItems` / `minItems` / `maxItems`, `minLength` / `maxLength` / `pattern`, `minimum` / `maximum` / `exclusiveMinimum` / `exclusiveMaximum` / `multipleOf`. `format` and unknown keywords are ignored, so the client is never stricter than the server.
+
 ## Text answers
 
 ```typescript
@@ -245,13 +268,13 @@ Standalone functions (create the client internally; `config` is optional):
 | `inference(params, config?)` | `Promise<InferenceResponse<InferFormat<F>>>` |
 | `text(params, config?)` | `Promise<TextResponse>` |
 
-`config`: `baseUrl` (default `AGENT_RUNTIME_URL` env or `http://localhost:10050`), `headers`, `fetch`, `dispatcher`, `signal`.
+`config`: `baseUrl` (default `AGENT_RUNTIME_URL` env or `http://localhost:10050`), `headers`, `fetch`, `dispatcher`, `signal`, `validateAnswer`, `maxAttempts`.
 
 Client:
 
 | Method | Returns |
 |--------|---------|
-| `createClient(options)` / `new AgentRuntimeClient(options)` | client; options: `baseUrl`, `fetch`, `headers`, `dispatcher` |
+| `createClient(options)` / `new AgentRuntimeClient(options)` | client; options: `baseUrl`, `fetch`, `headers`, `dispatcher`, `validateAnswer` (true), `maxAttempts` (3) |
 | `generateObject(params, options?)` | `Promise<InferFormat<F>>` |
 | `generateText(params, options?)` | `Promise<string>` |
 | `inference(params, options?)` | `Promise<InferenceResponse<InferFormat<F>>>` |
@@ -262,6 +285,8 @@ Client:
 | `getAttachment(id, attachmentId)` | `Promise<Attachment>` |
 | `deleteInference(id)` | `Promise<{ ok: boolean }>` |
 | `defineFormat(schema)` | the schema with literal types preserved (the only way to declare a format: no separate answer type) |
+| `validateAnswer(value, schema)`, `assertAnswer(value, schema)` | client-side validation, typed result / throws |
+| `validateToolArguments(value, schema)`, `validateValue(value, schema, path)` | the raw validator shared with the server |
 | `encodeFile(name, bytes \| string)`, `encodeImage(bytes)`, `userMessage(text, images?)` | request helpers |
 
 `params`: `messages` (`{ role, content, images? }[]`), `files?` (`{ name, content }[]`), `format` (object mode), `model?`, `instructions?`. `options`: `signal?`, `headers?`.
@@ -271,7 +296,7 @@ Client:
 ```bash
 npm install
 npm run build   # rollup → build/index.mjs, build/index.cjs, types.d.ts
-npm test        # build, compile-time assertions on the published types, runtime test against BASE_URL
+npm test        # build, compile-time assertions on the published types, validator + retry test (no server), runtime test against BASE_URL
 ```
 
 ## License

@@ -15,7 +15,7 @@ export const resolveBaseUrl = (baseUrl?: string): string =>
 
 /** Builds a client and the per-request options from one flat config object. */
 export const resolveConfig = (config: FunctionConfig = {}): { client: AgentRuntimeClient; options: RequestOptions } => {
-  const { baseUrl, fetch, headers, dispatcher, signal } = config;
-  const client = new AgentRuntimeClient({ baseUrl: resolveBaseUrl(baseUrl), fetch, headers, dispatcher });
+  const { baseUrl, fetch, headers, dispatcher, signal, validateAnswer, maxAttempts } = config;
+  const client = new AgentRuntimeClient({ baseUrl: resolveBaseUrl(baseUrl), fetch, headers, dispatcher, validateAnswer, maxAttempts });
   return { client, options: signal ? { signal } : {} };
 };

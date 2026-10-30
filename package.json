@@ -56,7 +56,7 @@
     "publish:x": "npm run build && sh ./scripts/linux/publish.sh",
     "build:sdk": "npm --prefix packages/sdk run build",
     "test:sdk": "npm --prefix packages/sdk test",
-    "test:schema": "tsx demo/schema.test.ts",
+    "test:schema": "cmp packages/sdk/src/validation/validateToolArguments.ts src/validation/validateToolArguments.ts && tsx demo/schema.test.ts",
     "smoke:schema": "tsx demo/smoke-schema.ts"
   },
   "dependencies": {

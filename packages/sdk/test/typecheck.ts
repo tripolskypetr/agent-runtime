@@ -2,7 +2,7 @@
  * Compile-time assertions for the inferred answer types. Compiled against the
  * published `types.d.ts`, i.e. exactly what a consumer of the package sees.
  */
-import { createClient, defineFormat, generateObject, generateText, inference, type FormatModel, type InferFormat, type InferProperty } from "agent-runtime-sdk";
+import { createClient, defineFormat, generateObject, generateText, inference, validateAnswer, assertAnswer, type FormatModel, type InferFormat, type InferProperty } from "agent-runtime-sdk";
 import { Agent1Format } from "./agent1.format.js";
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -200,7 +200,20 @@ async function agent1() {
   }
 }
 
+/* 10. Client-side validation helpers narrow unknown input to the schema type. */
+function validation(input: unknown) {
+  const r = validateAnswer(input, Agent1Format);
+  if (r.success) {
+    type _v1 = Expect<Equal<NonNullable<typeof r.data>, Agent1>>;
+  }
+  const a = assertAnswer(input, Agent1Format);
+  type _v2 = Expect<Equal<typeof a, Agent1>>;
+  void createClient({ validateAnswer: false, maxAttempts: 5 });
+  void generateObject({ messages: [], format: Agent1Format }, { maxAttempts: 2, validateAnswer: true });
+}
+
 void inline;
 void union;
 void standalone;
 void agent1;
+void validation;

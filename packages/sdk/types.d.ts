@@ -318,6 +318,8 @@ interface Health {
     uptimeSeconds: number;
 }
 
+/** Default number of inferences `generateObject` / `inference` run before giving up on an answer the client-side validator rejects. */
+declare const DEFAULT_MAX_ATTEMPTS = 3;
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 interface ClientOptions {
     /** Base URL of agent-runtime, e.g. `http://localhost:10050`. */
@@ -332,6 +334,14 @@ interface ClientOptions {
      * `new Agent({ headersTimeout: 0, bodyTimeout: 0 })` from `undici` to lift the limit.
      */
     dispatcher?: unknown;
+    /**
+     * Validate every successful answer against `format` on the client with the
+     * same validator the server uses (a verbatim copy), and run the inference
+     * again when it does not match. Default true.
+     */
+    validateAnswer?: boolean;
+    /** How many inferences to run before failing with `schema_mismatch` when the client-side validation keeps rejecting. Default 3. */
+    maxAttempts?: number;
 }
 interface RequestOptions {
     signal?: AbortSignal;
@@ -348,10 +358,20 @@ declare class AgentRuntimeClient {
     private readonly fetchFn;
     private readonly headers;
     private readonly dispatcher;
+    private readonly validateAnswer;
+    private readonly maxAttempts;
     constructor(options?: ClientOptions);
     /**
      * POST /api/v1/inference. Resolves to the full typed response, success or
      * failure; the `status` field discriminates.
+     *
+     * With `validateAnswer` (default) a successful answer is checked against
+     * `format` locally; a mismatch runs the inference again, up to `maxAttempts`
+     * times in total, and then resolves to a failure with code `schema_mismatch`
+     * whose `details` list every rejected attempt. The server validates with the
+     * same code, so this only triggers against an older server or a transport
+     * that altered the payload; it is the client's guarantee that the resolved
+     * value really has the inferred type.
      */
     inference<const F extends FormatModel>(params: InferenceParams<F>, options?: RequestOptions): Promise<InferenceResponse<InferFormat<F>>>;
     /**
@@ -447,4 +467,56 @@ declare const encodeImage: (data: Uint8Array) => string;
 /** Shorthand for a user message with optional image attachments. */
 declare const userMessage: (content: string, images?: Uint8Array[]) => RequestMessage;
 
-export { AgentRuntimeClient, AgentRuntimeError, type Attachment, type AttachmentKind, type AttachmentMeta, type ClientOptions, DEFAULT_BASE_URL, type DefaultRefDepth, type FetchLike, type FormatItems, type FormatModel, type FormatProperty, type FunctionConfig, type Health, type InferFormat, type InferProperty, type InferenceError, type InferenceErrorCode, type InferenceFailure, type InferenceMode, type InferenceParams, type InferenceRecord, type InferenceResponse, type InferenceStatus, type InferenceSuccess, type InferenceSummary, type JsonSchema, type JsonSchemaType, type ListInferencesQuery, type ListInferencesResponse, type RequestFile, type RequestMessage, type RequestOptions, type RequestRole, type RunInfo, type StoredRequest, type TextParams, type TextResponse, type TextSuccess, createClient, defineFormat, encodeFile, encodeImage, generateObject, generateText, inference, isInferenceFailure, text, userMessage };
+/**
+ * Answer validator shared by agent-runtime-sdk and the agent-runtime server.
+ *
+ * THIS FILE IS COPIED VERBATIM between packages/sdk/src/validation/ and src/validation/
+ * (npm run test:schema fails when the copies diverge). It descends from
+ * json-inference/src/helpers/validateToolArguments.ts and keeps its exports and
+ * result shape, extended to the JSON Schema draft 2020-12 keywords the server
+ * accepts: type as string or array (incl. "null"), enum/const of any JSON value,
+ * oneOf/anyOf/allOf/not, if/then/else, local $ref (JSON pointer into the root,
+ * e.g. #/$defs/predicate), additionalProperties, patternProperties, propertyNames,
+ * dependentRequired/dependentSchemas, min/maxProperties, items/prefixItems/
+ * contains/uniqueItems, min/maxItems, min/maxLength, pattern, minimum/maximum/
+ * exclusiveMinimum/exclusiveMaximum/multipleOf. Unknown keywords and `format` are
+ * ignored, so it is never stricter than the server's ajv check. No dependencies.
+ *
+ * One error is reported, as a dotted path from the root `answer`:
+ *   signal.direction: must be exactly "long"
+ *   claims[0].id: must match pattern ^c[0-9]{1,2}$
+ */
+
+interface ValidationResult<T = any> {
+    success: boolean;
+    data?: T;
+    error?: string;
+}
+declare const typeOf: (value: unknown) => string;
+type SchemaNode = Record<string, any>;
+type Schema = SchemaNode | boolean;
+/** Resolves a local JSON pointer reference (`#/$defs/name`, `#/properties/x`) against the root schema. */
+declare const resolveRef: (root: unknown, ref: string) => Schema | undefined;
+/**
+ * Validates `value` against `schema`; returns the first problem as `path: message`
+ * or null. `root` is the schema that `$ref`s are resolved against (defaults to `schema`).
+ */
+declare const validateValue: (value: unknown, schema: any, path: string, root?: any) => string | null;
+declare const validateToolArguments: <T = any>(parsedArguments: unknown, schema: FormatModel) => ValidationResult<T>;
+
+/**
+ * Typed wrapper of the shared validator: checks an answer (from the server, a
+ * cache on disk, anywhere) against its schema and narrows it to `InferFormat<F>`.
+ *
+ * ```ts
+ * const cached = JSON.parse(await fs.readFile("answer.json", "utf-8"));
+ * const result = validateAnswer(cached, Agent1Format);
+ * if (result.success) result.data.verdict; // typed
+ * else console.log(result.error);         // "Invalid arguments: signal.direction: must be exactly \"long\""
+ * ```
+ */
+declare const validateAnswer: <const F extends FormatModel>(value: unknown, format: F) => ValidationResult<InferFormat<F>>;
+/** Throws when the answer does not match the schema; returns it typed otherwise. */
+declare const assertAnswer: <const F extends FormatModel>(value: unknown, format: F) => InferFormat<F>;
+
+export { AgentRuntimeClient, AgentRuntimeError, type Attachment, type AttachmentKind, type AttachmentMeta, type ClientOptions, DEFAULT_BASE_URL, DEFAULT_MAX_ATTEMPTS, type DefaultRefDepth, type FetchLike, type FormatItems, type FormatModel, type FormatProperty, type FunctionConfig, type Health, type InferFormat, type InferProperty, type InferenceError, type InferenceErrorCode, type InferenceFailure, type InferenceMode, type InferenceParams, type InferenceRecord, type InferenceResponse, type InferenceStatus, type InferenceSuccess, type InferenceSummary, type JsonSchema, type JsonSchemaType, type ListInferencesQuery, type ListInferencesResponse, type RequestFile, type RequestMessage, type RequestOptions, type RequestRole, type RunInfo, type StoredRequest, type TextParams, type TextResponse, type TextSuccess, type ValidationResult, assertAnswer, createClient, defineFormat, encodeFile, encodeImage, generateObject, generateText, inference, isInferenceFailure, resolveRef, text, typeOf, userMessage, validateAnswer, validateToolArguments, validateValue };

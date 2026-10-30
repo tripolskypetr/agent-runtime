@@ -11,6 +11,10 @@ import type {
   TextResponse,
 } from "../model/Api.model.js";
 import { AgentRuntimeError, isInferenceFailure, isInvalidFormat } from "./AgentRuntimeError.js";
+import { validateToolArguments } from "../validation/validateToolArguments.js";
+
+/** Default number of inferences `generateObject` / `inference` run before giving up on an answer the client-side validator rejects. */
+export const DEFAULT_MAX_ATTEMPTS = 3;
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -27,6 +31,14 @@ export interface ClientOptions {
    * `new Agent({ headersTimeout: 0, bodyTimeout: 0 })` from `undici` to lift the limit.
    */
   dispatcher?: unknown;
+  /**
+   * Validate every successful answer against `format` on the client with the
+   * same validator the server uses (a verbatim copy), and run the inference
+   * again when it does not match. Default true.
+   */
+  validateAnswer?: boolean;
+  /** How many inferences to run before failing with `schema_mismatch` when the client-side validation keeps rejecting. Default 3. */
+  maxAttempts?: number;
 }
 
 export interface RequestOptions {
@@ -45,12 +57,16 @@ export class AgentRuntimeClient {
   private readonly fetchFn: FetchLike;
   private readonly headers: Record<string, string>;
   private readonly dispatcher: unknown;
+  private readonly validateAnswer: boolean;
+  private readonly maxAttempts: number;
 
   constructor(options: ClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "http://localhost:10050").replace(/\/+$/, "");
     this.fetchFn = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
     this.headers = options.headers ?? {};
     this.dispatcher = options.dispatcher;
+    this.validateAnswer = options.validateAnswer ?? true;
+    this.maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS));
   }
 
   /* ----------------------------------------------------------- inference */
@@ -58,12 +74,48 @@ export class AgentRuntimeClient {
   /**
    * POST /api/v1/inference. Resolves to the full typed response, success or
    * failure; the `status` field discriminates.
+   *
+   * With `validateAnswer` (default) a successful answer is checked against
+   * `format` locally; a mismatch runs the inference again, up to `maxAttempts`
+   * times in total, and then resolves to a failure with code `schema_mismatch`
+   * whose `details` list every rejected attempt. The server validates with the
+   * same code, so this only triggers against an older server or a transport
+   * that altered the payload; it is the client's guarantee that the resolved
+   * value really has the inferred type.
    */
   public async inference<const F extends FormatModel>(
     params: InferenceParams<F>,
     options: RequestOptions = {},
   ): Promise<InferenceResponse<InferFormat<F>>> {
-    return this.runAgent<InferenceResponse<InferFormat<F>>>("/api/v1/inference", params, options);
+    const details: string[] = [];
+    let attempts = 0;
+    let turns = 0;
+    let durationMs = 0;
+    let last: InferenceResponse<InferFormat<F>> | null = null;
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
+      const response = await this.runAgent<InferenceResponse<InferFormat<F>>>("/api/v1/inference", params, options);
+      last = response;
+      attempts += response.attempts;
+      turns += response.turns;
+      durationMs += response.durationMs;
+      if (response.status !== "success" || !this.validateAnswer) return response;
+      const result = validateToolArguments(response.data, params.format);
+      if (result.success) return response;
+      details.push(`inference ${response.id}: ${result.error}`);
+    }
+    return {
+      id: last!.id,
+      model: last!.model,
+      attempts,
+      turns,
+      durationMs,
+      status: "error",
+      error: {
+        code: "schema_mismatch",
+        message: `Answer rejected by the client-side validator in ${this.maxAttempts} inference(s): ${details[details.length - 1]?.replace(/^inference [^:]+: /, "")}`,
+        details,
+      },
+    };
   }
 
   /**

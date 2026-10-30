@@ -2,8 +2,8 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { TSchema } from "@earendil-works/pi-ai";
 
 import type { FormatModel } from "../../model/Format.model.js";
-import { toModelSchema } from "../../helpers/schema.js";
-import { validateToolArguments } from "../../helpers/validateToolArguments.js";
+import { compileFormat, formatErrors, toModelSchema } from "../../helpers/schema.js";
+import { validateToolArguments } from "../../validation/validateToolArguments.js";
 import { getLogger, type ScopedLogger } from "../../lib/logger.js";
 
 export const PROVIDE_ANSWER_TOOL = "provide_answer";
@@ -48,7 +48,17 @@ export const createProvideAnswerTool = (schema: FormatModel, logger: ScopedLogge
     parameters: { type: "object", additionalProperties: true } as unknown as TSchema,
     executionMode: "sequential",
     execute: async (toolCallId, params) => {
-      const validation = validateToolArguments(params, schema);
+      // 1. the validator shared with the SDK (src/validation/validateToolArguments.ts is a verbatim copy of
+      //    packages/sdk/src/validation/validateToolArguments.ts): what it rejects here, the client rejects too
+      let validation = validateToolArguments(params, schema);
+      // 2. ajv on the full schema as a second gate: never looser than the spec (formats, keywords the copy ignores)
+      if (validation.success) {
+        const { validate } = compileFormat(schema as unknown as Record<string, unknown>);
+        if (!validate(params)) {
+          validation = { success: false, error: `Invalid arguments: ${formatErrors(validate.errors)}` };
+          log.warn("answer passed the shared validator but not ajv", { toolCallId, error: validation.error });
+        }
+      }
       if (!validation.success) {
         failures.push(validation.error ?? "Validation failed");
         log.warn("answer rejected", { toolCallId, error: validation.error, arguments: params, failuresSoFar: failures.length });

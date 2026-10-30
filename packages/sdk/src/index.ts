@@ -3,7 +3,7 @@ export { generateText, text } from "./functions/generateText.js";
 export { DEFAULT_BASE_URL } from "./functions/config.js";
 export type { FunctionConfig } from "./functions/config.js";
 
-export { AgentRuntimeClient, createClient } from "./client/AgentRuntimeClient.js";
+export { AgentRuntimeClient, createClient, DEFAULT_MAX_ATTEMPTS } from "./client/AgentRuntimeClient.js";
 export type { ClientOptions, FetchLike, RequestOptions } from "./client/AgentRuntimeClient.js";
 export { AgentRuntimeError, isInferenceFailure } from "./client/AgentRuntimeError.js";
 
@@ -47,3 +47,6 @@ export type {
 } from "./model/Api.model.js";
 
 export { encodeFile, encodeImage, userMessage } from "./helpers/encode.js";
+export { resolveRef, typeOf, validateToolArguments, validateValue } from "./validation/validateToolArguments.js";
+export type { ValidationResult } from "./validation/validateToolArguments.js";
+export { assertAnswer, validateAnswer } from "./validation/validateAnswer.js";
