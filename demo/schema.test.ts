@@ -92,7 +92,10 @@ reject("maxItems: too many based_on_claim_ids", agent1, withSignal({ ...goodSign
 check("nullable: the string \"null\" is still a valid string (prompt rule 5 covers it, not the schema)", validateToolArguments({ ...fixtureA, article: { ...fixtureA.article, published_at: "null" } }, agent1).success);
 check("nullable: published_at null ok", validateToolArguments({ ...fixtureA, article: { ...fixtureA.article, published_at: null } }, agent1).success);
 reject("nullable: published_at number", agent1, { ...fixtureA, article: { ...fixtureA.article, published_at: 5 } }, /article\.published_at: must be string or null/);
-reject("oneOf: signal is a string → both alternatives named, no branch preferred", agent1, withSignal("none"), /^Invalid arguments: signal: must be null or object, got string$/);
+reject("oneOf: signal is a string → both alternatives named with the object's required properties", agent1, withSignal("none"), /^Invalid arguments: signal: must be null or object with required "direction", "asset", "based_on_claim_ids", "entry", "invalidation", "hard_stop", "max_holding_periods", "ttl_hours", "confidence", "rationale", got string$/);
+reject("nested oneOf inside the $ref leaf: value as string", agent1, withSignal({ ...goodSignal, entry: { feature: "last_price", op: "gt", value: "84900" } }), /^Invalid arguments: signal\.entry\.value: must be number or object with required "feature", got string$/);
+reject("array type names the item type", agent1, withSignal({ ...goodSignal, based_on_claim_ids: "c1" }), /^Invalid arguments: signal\.based_on_claim_ids: must be array of string, got string$/);
+reject("nested missing property two levels down", agent1, withSignal({ ...goodSignal, hard_stop: { value: 2 } }), /^Invalid arguments: signal\.hard_stop: is missing required property "mode"$/);
 const { rationale: _r, ...signalWithoutRationale } = goodSignal;
 reject("oneOf: missing property inside the object branch names the property, not the null branch", agent1, withSignal(signalWithoutRationale), /^Invalid arguments: signal: is missing required property "rationale"$/);
 reject("oneOf: wrong type inside the object branch", agent1, withSignal({ ...goodSignal, ttl_hours: "24" }), /^Invalid arguments: signal\.ttl_hours: must be number, got string$/);

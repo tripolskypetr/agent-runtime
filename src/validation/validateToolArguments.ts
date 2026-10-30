@@ -52,7 +52,7 @@ const rankOf = (error: string): number => {
   return depth * 2 + (isTypeMismatch(error) ? 0 : 1);
 };
 
-const isTypeMismatch = (error: string): boolean => /: must be [a-z ]+, got [a-z]+$/.test(error);
+const isTypeMismatch = (error: string): boolean => /: must be (?:[a-z]+(?: with required [^,]+(?:, [^,]+)*| of [a-z ]+)?)(?: or [a-z]+(?: with required [^,]+(?:, [^,]+)*| of [a-z ]+)?)*, got [a-z]+$/.test(error);
 
 /**
  * One message for a failed oneOf/anyOf at `path`. When some branch matched the value's shape and
@@ -65,7 +65,7 @@ const branchError = (errors: string[], path: string): string => {
   const prefix = `${path}: `;
   // branches that matched the value's type and failed on content are the ones worth reporting;
   // "must be null, got object" from the other branch is not an alternative the model should take
-  const content = errors.filter((error) => !isTypeMismatch(error));
+  const content = errors.filter((error) => !(isTypeMismatch(error) && error.slice(0, error.indexOf(":")) === path));
   const pool = content.length ? content : errors;
   const atRoot = pool.every((error) => error.slice(0, error.indexOf(":")) === path);
   if (!atRoot) return pool.reduce((best, error) => (rankOf(error) > rankOf(best) ? error : best), pool[0] ?? "does not match the schema");
@@ -75,7 +75,7 @@ const branchError = (errors: string[], path: string): string => {
   const others: string[] = [];
   let got = "";
   for (const message of messages) {
-    const type = /^must be ([a-z ]+), got ([a-z]+)$/.exec(message);
+    const type = /^must be (.+), got ([a-z]+)$/.exec(message);
     const exact = /^must be exactly (.+)$/.exec(message);
     const oneOf = /^must be one of \[(.+)\]$/.exec(message);
     if (type) {
@@ -122,6 +122,13 @@ const matchesType = (value: unknown, type: string): boolean => {
     default:
       return true; // unknown type name: do not reject, the server decides
   }
+};
+
+/** "object" alone says nothing about the shape: name its required properties; for arrays the item type. */
+const describeType = (type: string, node: SchemaNode): string => {
+  if (type === "object" && Array.isArray(node.required) && node.required.length) return `object with required ${node.required.map(show).join(", ")}`;
+  if (type === "array" && isObject(node.items) && node.items.type !== undefined) return `array of ${Array.isArray(node.items.type) ? node.items.type.join(" or ") : node.items.type}`;
+  return type;
 };
 
 const regexCache = new Map<string, RegExp | null>();
@@ -178,7 +185,7 @@ export const validateValue = (value: unknown, schema: any, path: string, root: a
   if (node.type !== undefined) {
     const types: string[] = Array.isArray(node.type) ? node.type : [node.type];
     if (!types.some((type) => matchesType(value, type))) {
-      return `${path}: must be ${types.join(" or ")}, got ${typeOf(value)}`;
+      return `${path}: must be ${types.map((type) => describeType(type, node)).join(" or ")}, got ${typeOf(value)}`;
     }
   }
   if ("const" in node && !deepEqual(value, node.const)) return `${path}: must be exactly ${show(node.const)}`;
