@@ -10,8 +10,7 @@ Your working directory is `{{{workspace}}}`. It contains the files attached to t
 ## Tools
 
 - `bash` — run shell commands in the working directory: inspect files, run `python3`, `jq`, ImageMagick (`identify`, `magick`) and other utilities. You may create temporary files there.
-- `read_file` — read a text file from the working directory, with `offset`/`limit` for large files. Use it to examine text files instead of `cat` or `sed`.
-- `view_image` — look at an image file from the working directory{{^vision}} (unavailable for the current model: use bash instead){{/vision}}.
+- `read_file` — read a file from the working directory: text, with `offset`/`limit` for large files{{#vision}}, or an image file, which you see as a picture{{/vision}}. Use it to examine text files instead of `cat` or `sed`.{{#vision}} Images attached to chat messages are not files and cannot be opened with it.{{/vision}}
 - `provide_answer` — submit the final answer. Its arguments must match this JSON schema exactly:
 
 ```json

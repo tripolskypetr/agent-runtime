@@ -9,15 +9,6 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/bmp": "bmp",
 };
 
-const MIME_BY_EXT: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  bmp: "image/bmp",
-};
-
 /** Strips a `data:*;base64,` prefix, returning the raw base64 payload. */
 export const stripDataUrl = (image: string): string =>
   image.startsWith("data:") ? image.slice(image.indexOf(",") + 1) : image;
@@ -29,28 +20,36 @@ export const dataUrlMime = (image: string): string | null => {
   return match ? match[1] : null;
 };
 
-/** Detects an image mime type from magic bytes. Returns null for non-images. */
+/** BITMAPINFOHEADER and its relatives: the sizes a real bmp declares at offset 14. */
+const BMP_HEADER_SIZES = new Set([12, 40, 52, 56, 64, 108, 124]);
+
+/**
+ * Detects an image mime type from magic bytes. Returns null for non-images. The gif and bmp
+ * signatures are checked in full: "GIF" and "BM" alone are also how plain text can start.
+ */
 export const sniffImageMime = (bytes: Uint8Array): string | null => {
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
-  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/gif";
+  if (
+    bytes.length >= 6 &&
+    bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38 &&
+    (bytes[4] === 0x37 || bytes[4] === 0x39) && bytes[5] === 0x61
+  ) return "image/gif";
   if (
     bytes.length >= 12 &&
     bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
     bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
   ) return "image/webp";
-  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) return "image/bmp";
+  if (
+    bytes.length >= 18 &&
+    bytes[0] === 0x42 && bytes[1] === 0x4d &&
+    bytes[6] === 0 && bytes[7] === 0 && bytes[8] === 0 && bytes[9] === 0 &&
+    bytes[15] === 0 && bytes[16] === 0 && bytes[17] === 0 && BMP_HEADER_SIZES.has(bytes[14])
+  ) return "image/bmp";
   return null;
 };
 
-export const mimeByExtension = (fileName: string): string | null => {
-  const ext = path.extname(fileName).slice(1).toLowerCase();
-  return MIME_BY_EXT[ext] ?? null;
-};
-
 export const extensionByMime = (mime: string): string => EXT_BY_MIME[mime] ?? "bin";
-
-export const isImageMime = (mime: string): boolean => mime.startsWith("image/");
 
 export const sha256 = (bytes: Uint8Array | string): string =>
   createHash("sha256").update(bytes).digest("hex");

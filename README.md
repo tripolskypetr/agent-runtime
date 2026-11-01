@@ -14,18 +14,17 @@
 
 ![screenshot](https://raw.githubusercontent.com/tripolskypetr/agent-runtime/master/screenshots/screenshot1.png)
 
-The agent loop is [`@earendil-works/pi-agent-core`](https://github.com/earendil-works/pi/tree/main/packages/agent); inference goes through the [`ollama`](https://www.npmjs.com/package/ollama) SDK with native tool calling, exactly like `OllamaProvider` in [json-inference](https://github.com/tripolskypetr/json-inference). Every run has four tools:
+The agent loop is [`@earendil-works/pi-agent-core`](https://github.com/earendil-works/pi/tree/main/packages/agent); inference goes through the [`ollama`](https://www.npmjs.com/package/ollama) SDK with native tool calling, exactly like `OllamaProvider` in [json-inference](https://github.com/tripolskypetr/json-inference). Every run has three tools:
 
 | Tool | Purpose |
 |------|---------|
 | `provide_answer` | The only way to finish. Its parameters are the request `format`; arguments are validated with the json-inference validator. |
 | `bash` | Shell in the data workspace, modelled after pi's bash tool: combined stdout/stderr, timeout, process-group kill, truncated output. |
-| `read_file` | Text file reader copied from pi's `read` tool: 1-indexed `offset`/`limit`, output cut at `READ_MAX_LINES`/`READ_MAX_BYTES` with a note naming the next offset. Images are refused in favour of `view_image`, binary files in favour of `bash`. |
-| `view_image` | Shows an image from the workspace to a vision model. |
+| `read_file` | File reader copied from pi's `read` tool. Text: 1-indexed `offset`/`limit`, output cut at `READ_MAX_LINES`/`READ_MAX_BYTES` with a note naming the next offset. Image files, detected by their bytes: returned as a picture when `OLLAMA_VISION=1`, refused in favour of `bash` otherwise. Other binary files: refused in favour of `bash`. Images attached to chat messages are not files and cannot be opened with it. |
 
 Harness rules:
 
-1. The workspace (`DATA_DIR`, `/app/data` in Docker) is wiped before and after every inference. Request files are written there. Images from messages are not: they go to the model inline in user messages when `OLLAMA_VISION=1` and are stored in SQLite. With `OLLAMA_VISION=0`, and for `assistant` and `system` messages, the model gets a placeholder instead. To process a picture with bash or `view_image`, pass it in `files`.
+1. The workspace (`DATA_DIR`, `/app/data` in Docker) is wiped before and after every inference. Request files are written there. Images from messages are not: they go to the model inline in user messages when `OLLAMA_VISION=1` and are stored in SQLite. With `OLLAMA_VISION=0`, and for `assistant` and `system` messages, the model gets a placeholder instead. To process a picture with bash or `read_file`, pass it in `files`.
 2. If the model answers with text instead of calling `provide_answer`, a user message demanding the tool call is appended and the model is prompted again on the same conversation, up to `MAX_ATTEMPTS` times.
 3. Inferences run one at a time (shared workspace); callers queue.
 4. Every inference, successful or failed, is stored in SQLite with the full transcript, request files, images, images viewed by tools and files the agent produced.
@@ -97,7 +96,7 @@ The model does not see the schema verbatim: `$schema`, `$id`, `title`, `examples
 
 ### `POST /api/v1/text`
 
-The `generateText` counterpart: the same `messages`, `files`, `model` and `instructions`, no `format`. The agent still has `bash`, `read_file` and `view_image`; the text of its final message is returned as is.
+The `generateText` counterpart: the same `messages`, `files`, `model` and `instructions`, no `format`. The agent still has `bash` and `read_file`; the text of its final message is returned as is.
 
 ```json
 { "messages": [{ "role": "user", "content": "Summarise report.pdf in three sentences" }], "files": [{ "name": "report.pdf", "content": "<base64>" }] }
@@ -149,7 +148,7 @@ All settings are environment variables (see [config/.env.example](config/.env.ex
 | `OLLAMA_HOST` | `https://ollama.com` | Ollama endpoint. Local: `http://host.docker.internal:11434` |
 | `OLLAMA_API_KEY` | | Bearer token for ollama.com |
 | `OLLAMA_MODEL` | `gemma4:31b-cloud` | Default model; a request may override it |
-| `OLLAMA_VISION` | `1` | Attach images to messages and enable `view_image` |
+| `OLLAMA_VISION` | `1` | Attach images to messages and let `read_file` return image files as pictures |
 | `OLLAMA_THINK` | | `true`/`false` or `low`/`medium`/`high`; empty = model default. The `.env.example` sets `false` so thinking is off unless you enable it |
 | `MAX_ATTEMPTS` | `3` | Re-prompts when `provide_answer` was not called |
 | `MAX_TURNS` | `120` | Model calls per inference |
@@ -182,7 +181,7 @@ What is logged, by scope:
 | `http` | every request and response with id, status and duration; 4xx as warn, 5xx as error |
 | `inference:<id>` | request summary, files written, images stored, rendered system prompt, every attempt, turn (stop reason, tool calls, tokens), tool call with arguments, tool result preview, retries with the reason, final result or failure |
 | `inference:<id>:ollama#n` | each model call: messages (roles, sizes, previews), tools, options, response text, tool calls, tokens, duration, provider errors |
-| `inference:<id>:bash` / `read_file` / `view_image` / `provide_answer` | command, exit code, duration, output preview, timeouts and kills; file path, size, lines and truncation; image path and size; validation failures and the accepted answer |
+| `inference:<id>:bash` / `read_file` / `provide_answer` | command, exit code, duration, output preview, timeouts and kills; file path, size, lines and truncation; image path and size; validation failures and the accepted answer |
 | `workspace`, `queue`, `db`, `systemPrompt`, `admin` | workspace resets and writes, queue waits, every database write, template reloads, admin API calls |
 
 Secrets (`apiKey`, `authorization`, …) are masked, strings longer than 2000 characters (base64 images, prompts) are truncated, errors are stored with name, message and stack. The same records go to stdout (`docker compose logs -f agent-runtime`) because `LOG_CONSOLE` defaults to `all`; set `warn` to keep only warnings and errors there, or `off`. Other settings: `LOGS_ENABLED`, `LOGS_DIR`, `LOG_FILE`, `LOG_LEVEL` (Fastify's own request log on stdout).
