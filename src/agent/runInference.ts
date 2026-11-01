@@ -1,4 +1,3 @@
-import path from "path";
 import { Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, ImageContent, TextContent, ToolCall, UserMessage } from "@earendil-works/pi-ai";
 
@@ -10,7 +9,7 @@ import { describeFormat } from "../helpers/schema.js";
 import { getLogger, preview, since, type ScopedLogger } from "../lib/logger.js";
 import type { InferenceError, InferenceMode, InferenceRequest, StoredRequest, TextRequest } from "../model/Inference.model.js";
 import { createOllamaModel, createOllamaStreamFn, defaultOllamaOptions, OLLAMA_API, OLLAMA_PROVIDER } from "./ollama.js";
-import { renderSystemPrompt, RETRY_MESSAGE, TEXT_RETRY_MESSAGE } from "./systemPrompt.js";
+import { IMAGE_OMITTED, renderSystemPrompt, RETRY_MESSAGE, TEXT_RETRY_MESSAGE } from "./systemPrompt.js";
 import { createBashTool } from "./tools/bash.tool.js";
 import { createProvideAnswerTool, PROVIDE_ANSWER_TOOL } from "./tools/provideAnswer.tool.js";
 import { createReadFileTool } from "./tools/readFile.tool.js";
@@ -40,7 +39,7 @@ export interface InferenceOutcome {
 
 /**
  * Runs one inference end to end:
- * reset workspace → materialize files/images → pi agent loop over Ollama →
+ * reset workspace → write request files → pi agent loop over Ollama →
  * retry with an explicit JSON demand while provide_answer was not called →
  * snapshot produced files → persist transcript → clear workspace.
  */
@@ -116,7 +115,7 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
     finish({ status: "error", error, model: modelName, attempts, turns, durationMs: since(started) });
 
   try {
-    // 1. Fresh workspace with the request files and images.
+    // 1. Fresh workspace with the request files.
     await workspace.reset();
     const inputs = new Map<string, string>();
     const storedFiles: StoredRequest["files"] = [];
@@ -140,37 +139,36 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
       fileList.push({ path: relative, size: bytes.byteLength });
     }
 
-    const imageList: { path: string; size: number; messageIndex: number }[] = [];
     const storedMessages: StoredRequest["messages"] = [];
     const agentMessages: AgentMessage[] = [];
     const extraInstructions: string[] = request.instructions?.trim() ? [request.instructions.trim()] : [];
 
     for (const [index, message] of request.messages.entries()) {
       const imageParts: ImageContent[] = [];
-      const imagePaths: string[] = [];
       const imageIds: string[] = [];
       for (const [imageIndex, raw] of (message.images ?? []).entries()) {
         const decoded = decodeImage(raw);
-        const relative = await workspace.write(
-          path.posix.join("images", `message_${index}_${imageIndex}.${extensionByMime(decoded.mime)}`),
-          decoded.bytes,
-        );
-        inputs.set(relative, sha256(decoded.bytes));
-        const meta = sink.store({ base64: decoded.base64, mime: decoded.mime, kind: "image", name: relative });
-        log.debug("message image written", { messageIndex: index, imageIndex, path: relative, mime: decoded.mime, size: decoded.bytes.byteLength, attachmentId: meta.id });
+        const name = `message_${index}_${imageIndex}.${extensionByMime(decoded.mime)}`;
+        const meta = sink.store({ base64: decoded.base64, mime: decoded.mime, kind: "image", name });
+        log.debug("message image stored", { messageIndex: index, imageIndex, name, mime: decoded.mime, size: decoded.bytes.byteLength, attachmentId: meta.id });
         imageIds.push(meta.id);
-        imagePaths.push(relative);
-        imageList.push({ path: relative, size: decoded.bytes.byteLength, messageIndex: index });
         imageParts.push({ type: "image", data: decoded.base64, mimeType: decoded.mime });
       }
       storedMessages.push({ role: message.role, content: message.content, ...(imageIds.length ? { images: imageIds } : {}) });
 
+      // Images reach the model once, inline in a user message of a vision model. Otherwise a marker tells the
+      // model that something is missing; the bytes stay in the database for the admin UI either way.
+      const shown = vision && message.role === "user";
+      if (!shown && imageParts.length) {
+        log.warn("message images not shown to the model", { messageIndex: index, role: message.role, vision, images: imageParts.length });
+      }
+      const text = [message.content, ...(shown ? [] : imageParts.map(() => IMAGE_OMITTED))].filter(Boolean).join("\n\n");
+
       if (message.role === "system") {
-        if (message.content.trim()) extraInstructions.push(message.content.trim());
+        if (text.trim()) extraInstructions.push(text.trim());
         log.debug("request message folded into instructions", { messageIndex: index, length: message.content.length });
         continue;
       }
-      const text = [message.content, ...imagePaths.map((p) => `[attached image: ${p}]`)].filter(Boolean).join("\n\n");
       if (message.role === "assistant") {
         agentMessages.push(syntheticAssistantMessage(text, modelName));
         log.debug("request message added", { messageIndex: index, role: "assistant", length: text.length });
@@ -178,7 +176,7 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
       }
       const parts: (TextContent | ImageContent)[] = [
         ...(text ? [{ type: "text", text } as TextContent] : []),
-        ...(vision ? imageParts : []),
+        ...(shown ? imageParts : []),
       ];
       const user: UserMessage = {
         role: "user",
@@ -186,7 +184,7 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
         timestamp: Date.now(),
       };
       agentMessages.push(user);
-      log.debug("request message added", { messageIndex: index, role: "user", length: text.length, images: vision ? imageParts.length : 0, preview: preview(text, 120) });
+      log.debug("request message added", { messageIndex: index, role: "user", length: text.length, images: shown ? imageParts.length : 0, preview: preview(text, 120) });
     }
     if (!agentMessages.length || agentMessages[agentMessages.length - 1].role !== "user") {
       agentMessages.push({ role: "user", content: "Proceed with the task.", timestamp: Date.now() });
@@ -200,15 +198,14 @@ export const runInference = async (request: InferenceRequest | TextRequest, ctx:
       model: modelName,
       ...(request.instructions ? { instructions: request.instructions } : {}),
     });
-    log.debug("workspace ready", { files: fileList, images: imageList, workspace: workspace.root });
+    log.debug("workspace ready", { files: fileList, workspace: workspace.root });
 
-    // 2. Agent with the three tools.
+    // 2. Agent with its tools.
     const provide = format ? createProvideAnswerTool(format, log) : null;
     const systemPrompt = await renderSystemPrompt({
       mode,
       workspace: workspace.root,
       files: fileList,
-      images: imageList,
       schema: provide?.modelSchema,
       vision,
       instructions: extraInstructions.join("\n\n") || undefined,

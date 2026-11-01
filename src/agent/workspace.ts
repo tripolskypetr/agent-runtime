@@ -9,7 +9,7 @@ const log = getLogger("workspace");
 
 /**
  * The data workspace: a single directory that is wiped before every inference,
- * filled with the request files and images, used by the agent through bash,
+ * filled with the request files, used by the agent through bash,
  * read_file and view_image, and snapshotted into the database when the inference ends.
  */
 export class Workspace {

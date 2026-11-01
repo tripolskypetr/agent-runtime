@@ -142,7 +142,7 @@ const results: boolean[] = [];
   results.push(report(`text file via read_file (${ms} ms, ${json.turns} turns)`, ok, { status, data: json.data, error: json.error }));
 }
 
-/* ---- 2. image + view_image ---- */
+/* ---- 2. image attached to a message ---- */
 {
   const png = encodePng(160, 160, (x, y) => {
     const dx = x - 80, dy = y - 80;
@@ -163,7 +163,7 @@ const results: boolean[] = [];
   });
   const data = json.data ?? {};
   const ok = status === 200 && data.color === "red" && data.shape === "circle";
-  results.push(report(`image via view_image (${ms} ms, ${json.turns} turns)`, ok, { status, data: json.data, error: json.error }));
+  results.push(report(`image attached to a message (${ms} ms, ${json.turns} turns)`, ok, { status, data: json.data, error: json.error }));
 }
 
 /* ---- 2b. text endpoint (generateText) ---- */

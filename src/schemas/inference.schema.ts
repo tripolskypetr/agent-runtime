@@ -27,7 +27,7 @@ export const requestMessageSchema = {
     content: { type: "string" },
     images: {
       type: "array",
-      description: "Base64 images (raw or data: URL). They are shown to the model and saved under images/ in the workspace.",
+      description: "Base64 images (raw or data: URL). They are shown to the model in user messages and stored in the history; they are not written to the workspace.",
       items: { type: "string" },
     },
   },

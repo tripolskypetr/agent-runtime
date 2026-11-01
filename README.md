@@ -25,7 +25,7 @@ The agent loop is [`@earendil-works/pi-agent-core`](https://github.com/earendil-
 
 Harness rules:
 
-1. The workspace (`DATA_DIR`, `/app/data` in Docker) is wiped before and after every inference. Request files are written there; images from messages go to `images/message_<i>_<j>.<ext>` and are also attached to the message when `OLLAMA_VISION=1`.
+1. The workspace (`DATA_DIR`, `/app/data` in Docker) is wiped before and after every inference. Request files are written there. Images from messages are not: they go to the model inline in user messages when `OLLAMA_VISION=1` and are stored in SQLite. With `OLLAMA_VISION=0`, and for `assistant` and `system` messages, the model gets a placeholder instead. To process a picture with bash or `view_image`, pass it in `files`.
 2. If the model answers with text instead of calling `provide_answer`, a user message demanding the tool call is appended and the model is prompted again on the same conversation, up to `MAX_ATTEMPTS` times.
 3. Inferences run one at a time (shared workspace); callers queue.
 4. Every inference, successful or failed, is stored in SQLite with the full transcript, request files, images, images viewed by tools and files the agent produced.
@@ -180,7 +180,7 @@ What is logged, by scope:
 |-------|--------|
 | `main`, `server` | startup with the effective config (secrets masked), listening, shutdown, unhandled errors |
 | `http` | every request and response with id, status and duration; 4xx as warn, 5xx as error |
-| `inference:<id>` | request summary, files and images written, rendered system prompt, every attempt, turn (stop reason, tool calls, tokens), tool call with arguments, tool result preview, retries with the reason, final result or failure |
+| `inference:<id>` | request summary, files written, images stored, rendered system prompt, every attempt, turn (stop reason, tool calls, tokens), tool call with arguments, tool result preview, retries with the reason, final result or failure |
 | `inference:<id>:ollama#n` | each model call: messages (roles, sizes, previews), tools, options, response text, tool calls, tokens, duration, provider errors |
 | `inference:<id>:bash` / `read_file` / `view_image` / `provide_answer` | command, exit code, duration, output preview, timeouts and kills; file path, size, lines and truncation; image path and size; validation failures and the accepted answer |
 | `workspace`, `queue`, `db`, `systemPrompt`, `admin` | workspace resets and writes, queue waits, every database write, template reloads, admin API calls |

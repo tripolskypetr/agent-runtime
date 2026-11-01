@@ -183,7 +183,7 @@ type RequestRole = "user" | "assistant" | "system";
 interface RequestMessage {
     role: RequestRole;
     content: string;
-    /** Base64 images (raw or data: URL). Shown to the model and saved under images/ in the workspace. */
+    /** Base64 images (raw or data: URL). Shown to the model and stored in the history; not written to the workspace. */
     images?: string[];
 }
 /** A file written into the agent workspace before the run starts. */

@@ -11,7 +11,6 @@ export interface SystemPromptInput {
   mode: InferenceMode;
   workspace: string;
   files: { path: string; size: number }[];
-  images: { path: string; size: number; messageIndex: number }[];
   /** Model-facing schema (see toModelSchema), already trimmed. */
   schema?: Record<string, unknown>;
   vision: boolean;
@@ -41,6 +40,9 @@ export const renderSystemPrompt = async (input: SystemPromptInput): Promise<stri
     instructions: input.instructions?.trim() || null,
   }).trim();
 };
+
+/** Stands in for an image of a request message that is not sent to the model (no vision, or not a user message). */
+export const IMAGE_OMITTED = "[image omitted: not visible to the model]";
 
 /** Message appended when the model replied with text instead of calling provide_answer (json-inference behaviour). */
 export const RETRY_MESSAGE =

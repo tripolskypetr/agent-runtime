@@ -98,7 +98,7 @@ export const registerInferenceRoutes = (app: FastifyInstance, deps: InferenceDep
         tags: ["inference"],
         summary: "Run the agent and return a structured answer (generateObject)",
         description:
-          "Writes the request files and images into the data workspace, runs the agent (bash, read_file, view_image, provide_answer) " +
+          "Writes the request files into the data workspace, runs the agent (bash, read_file, view_image, provide_answer) " +
           "on Ollama and returns the provide_answer arguments validated against `format` (JSON Schema draft 2020-12, see FormatModel). " +
           "A schema that does not compile (e.g. a `$ref` to a missing `$defs` entry) is rejected with 400 `invalid_format` before anything runs. " +
           "Inferences are executed one at a time; the workspace is wiped before and after each one. " +

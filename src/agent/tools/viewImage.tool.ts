@@ -9,7 +9,7 @@ import type { Workspace } from "../workspace.js";
 export const VIEW_IMAGE_TOOL = "view_image";
 
 const parameters = Type.Object({
-  path: Type.String({ description: "Path of the image relative to the working directory, e.g. images/message_1_0.jpg" }),
+  path: Type.String({ description: "Path of the image relative to the working directory, e.g. chart.png" }),
 });
 
 interface ViewImageDetails {
@@ -27,7 +27,7 @@ export const createViewImageTool = (workspace: Workspace, vision: boolean, logge
   label: "View image",
   description:
     "Look at an image file (jpeg, png, gif, webp) from the working directory. " +
-    "Images attached to the task are stored under images/. " +
+    "Images attached to messages are already in the conversation and are not files: use this tool only for image files in the working directory. " +
     (vision
       ? "The picture is shown to you directly."
       : "NOTE: the current model cannot see images, so this tool is unavailable; inspect pictures with bash tools instead."),

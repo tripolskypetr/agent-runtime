@@ -186,7 +186,7 @@ const summary = await generateText({
 
 ## Images
 
-Images go into `messages[].images` as base64; the server shows them to the model and also saves them under `images/` in the workspace so the agent can process them with bash.
+Images go into `messages[].images` as base64; the server shows them to the model in user messages and stores them in the history. They are not written to the workspace: to process a picture with bash, pass it in `files`.
 
 ```typescript
 import { generateObject, userMessage } from "agent-runtime-sdk";
