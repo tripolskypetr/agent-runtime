@@ -92,7 +92,7 @@ Records of a `wwwroot.jsonl` file (`{"role", "content", "images"}`) can be passe
 
 ## Client-side validation and retries
 
-The package ships a port of the server's answer validator ([src/agent_runtime_client/validation.py](src/agent_runtime_client/validation.py): a dependency-free JSON Schema checker with the same messages as the TypeScript original; its tests pin them against the shared fixtures). The client runs it on every successful answer, and when the answer does not match `format` it runs the inference again, up to `max_attempts` (3) times in total, then fails with `schema_mismatch` and one detail line per rejected inference. This should never trigger against a current server, which validates with the same logic; it is the client's guarantee that the value you get really matches the schema.
+The package ships a port of the server's answer validator ([validation.py](https://github.com/tripolskypetr/agent-runtime/blob/master/packages/python-sdk/src/agent_runtime_client/validation.py): a dependency-free JSON Schema checker with the same messages as the TypeScript original; its tests pin them against the shared fixtures). The client runs it on every successful answer, and when the answer does not match `format` it runs the inference again, up to `max_attempts` (3) times in total, then fails with `schema_mismatch` and one detail line per rejected inference. This should never trigger against a current server, which validates with the same logic; it is the client's guarantee that the value you get really matches the schema.
 
 ```python
 client = create_client(validate_answer=True, max_attempts=3)  # defaults
