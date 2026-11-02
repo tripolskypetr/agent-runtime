@@ -49,7 +49,7 @@ export const createProvideAnswerTool = (schema: FormatModel, logger: ScopedLogge
     executionMode: "sequential",
     execute: async (toolCallId, params) => {
       // 1. the validator shared with the SDK (src/validation/validateToolArguments.ts is a verbatim copy of
-      //    packages/sdk/src/validation/validateToolArguments.ts): what it rejects here, the client rejects too
+      //    packages/node-sdk/src/validation/validateToolArguments.ts): what it rejects here, the client rejects too
       let validation = validateToolArguments(params, schema);
       // 2. ajv on the full schema as a second gate: never looser than the spec (formats, keywords the copy ignores)
       if (validation.success) {

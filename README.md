@@ -122,7 +122,7 @@ If the model finishes without text it is asked again up to `MAX_ATTEMPTS` times,
 
 ## SDK
 
-[packages/sdk](packages/sdk) ships `agent-runtime-sdk`, a typed Node.js client over `fetch` with the json-inference `generateObject()` / `generateText()` pair. The answer type is inferred from the schema, so it has IntelliSense:
+[packages/node-sdk](packages/node-sdk) ships `agent-runtime-sdk`, a typed Node.js client over `fetch` with the json-inference `generateObject()` / `generateText()` pair. The answer type is inferred from the schema, so it has IntelliSense:
 
 ```typescript
 import { generateObject } from "agent-runtime-sdk";
@@ -137,7 +137,22 @@ const entry = await generateObject(
 entry.position; // "long" | "short" | "wait"
 ```
 
-See the [SDK README](packages/sdk/README.md) for the full API, error handling and long-request setup.
+See the [Node SDK README](packages/node-sdk/README.md) for the full API, error handling and long-request setup.
+
+[packages/python-sdk](packages/python-sdk) ships `agent-runtime-client` for Python 3.9+ over the standard library: the same `generate_object()` / `generate_text()` pair, the admin API and a port of the answer validator with the same messages:
+
+```python
+from agent_runtime_client import generate_object
+
+entry = generate_object(
+    [{"role": "user", "content": "…"}],
+    {"type": "object", "required": ["position"], "properties": {"position": {"type": "string", "enum": ["long", "short", "wait"], "description": "…"}}},
+    base_url="http://localhost:10050",  # optional; defaults to AGENT_RUNTIME_URL or http://localhost:10050
+)
+entry["position"]  # "long" | "short" | "wait"
+```
+
+See the [Python SDK README](packages/python-sdk/README.md).
 
 ## Configuration
 

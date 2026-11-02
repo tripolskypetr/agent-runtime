@@ -1,8 +1,9 @@
 /**
  * Answer validator shared by agent-runtime-sdk and the agent-runtime server.
  *
- * THIS FILE IS COPIED VERBATIM between packages/sdk/src/validation/ and src/validation/
- * (npm run test:schema fails when the copies diverge). It descends from
+ * THIS FILE IS COPIED VERBATIM between packages/node-sdk/src/validation/ and src/validation/
+ * (npm run test:schema fails when the copies diverge); packages/python-sdk ports it to
+ * Python with the same messages, pinned by its tests. It descends from
  * json-inference/src/helpers/validateToolArguments.ts and keeps its exports and
  * result shape, extended to the JSON Schema draft 2020-12 keywords the server
  * accepts: type as string or array (incl. "null"), enum/const of any JSON value,

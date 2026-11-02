@@ -54,9 +54,10 @@
     "smoke": "tsx demo/smoke.ts",
     "publish:win": "npm run build && .\\scripts\\win\\publish.bat",
     "publish:x": "npm run build && sh ./scripts/linux/publish.sh",
-    "build:sdk": "npm --prefix packages/sdk run build",
-    "test:sdk": "npm --prefix packages/sdk test",
-    "test:schema": "cmp packages/sdk/src/validation/validateToolArguments.ts src/validation/validateToolArguments.ts && tsx demo/schema.test.ts",
+    "build:sdk": "npm --prefix packages/node-sdk run build",
+    "test:sdk": "npm --prefix packages/node-sdk test",
+    "test:python-sdk": "cd packages/python-sdk && python3 -m unittest discover -s tests -v",
+    "test:schema": "cmp packages/node-sdk/src/validation/validateToolArguments.ts src/validation/validateToolArguments.ts && tsx demo/schema.test.ts",
     "smoke:schema": "tsx demo/smoke-schema.ts"
   },
   "dependencies": {

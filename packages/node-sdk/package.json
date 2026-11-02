@@ -22,11 +22,11 @@
     "url": "https://github.com/tripolskypetr"
   },
   "license": "MIT",
-  "homepage": "https://github.com/tripolskypetr/agent-runtime/tree/master/packages/sdk#readme",
+  "homepage": "https://github.com/tripolskypetr/agent-runtime/tree/master/packages/node-sdk#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/tripolskypetr/agent-runtime",
-    "directory": "packages/sdk"
+    "directory": "packages/node-sdk"
   },
   "bugs": {
     "url": "https://github.com/tripolskypetr/agent-runtime/issues"
