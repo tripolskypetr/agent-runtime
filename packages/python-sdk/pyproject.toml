@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-runtime-client"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python client for agent-runtime over the standard library: generate_object() with answers validated against a full JSON Schema, generate_text(), and the admin API."
 readme = "README.md"
 license = { text = "MIT" }

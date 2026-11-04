@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 import unittest
 
-from agent_runtime_client import AgentRuntimeError, create_client, encode_file, generate_object, generate_text
+import asyncio
+
+from agent_runtime_client import AgentRuntimeError, AsyncAgentRuntimeClient, create_client, encode_file, generate_object, generate_text, generate_text_async
 
 BASE_URL = os.environ.get("BASE_URL")
 
@@ -69,6 +71,16 @@ class RuntimeTest(unittest.TestCase):
         attachment = self.client.get_attachment(record["id"], file_meta["id"])
         self.assertEqual(attachment["data"].decode("utf-8"), self.csv)
         self.assertEqual(attachment["size"], file_meta["size"])
+
+    def test_async_round_trip(self):
+        async def run():
+            async with AsyncAgentRuntimeClient(BASE_URL) as client:
+                health, answer = await asyncio.gather(client.health(), generate_text_async([{"role": "user", "content": "Answer with exactly one word: what is the capital of Italy?"}], base_url=BASE_URL))
+                return health, answer
+
+        health, answer = asyncio.run(run())
+        self.assertEqual(health["status"], "ok")
+        self.assertRegex(answer, r"(?i)rome")
 
 
 if __name__ == "__main__":

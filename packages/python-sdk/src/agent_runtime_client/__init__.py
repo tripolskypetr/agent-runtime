@@ -2,9 +2,10 @@
 
 Import name ``agent_runtime_client``, distribution ``agent-runtime-client``. Zero dependencies, Python 3.9+.
 """
+from .async_client import AsyncAgentRuntimeClient, create_async_client
 from .client import DEFAULT_BASE_URL, DEFAULT_MAX_ATTEMPTS, AgentRuntimeClient, Transport, create_client, resolve_base_url, urllib_transport
 from .errors import AgentRuntimeError, is_inference_failure, is_invalid_format
-from .functions import generate_object, generate_text, inference, text
+from .functions import generate_object, generate_object_async, generate_text, generate_text_async, inference, inference_async, text, text_async
 from .helpers import encode_file, encode_image, user_message
 from .models import (
     Attachment,
@@ -32,11 +33,12 @@ from .models import (
 )
 from .validation import ValidationResult, assert_answer, resolve_ref, type_of, validate_answer, validate_tool_arguments, validate_value
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "AgentRuntimeClient",
     "AgentRuntimeError",
+    "AsyncAgentRuntimeClient",
     "Attachment",
     "AttachmentKind",
     "AttachmentMeta",
@@ -64,17 +66,22 @@ __all__ = [
     "Transport",
     "ValidationResult",
     "assert_answer",
+    "create_async_client",
     "create_client",
     "encode_file",
     "encode_image",
     "generate_object",
+    "generate_object_async",
     "generate_text",
+    "generate_text_async",
     "inference",
+    "inference_async",
     "is_inference_failure",
     "is_invalid_format",
     "resolve_base_url",
     "resolve_ref",
     "text",
+    "text_async",
     "type_of",
     "urllib_transport",
     "user_message",

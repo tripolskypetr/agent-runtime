@@ -9,6 +9,7 @@ agent-runtime is a REST harness for a [pi](https://github.com/earendil-works/pi)
 - `generate_object()`: the answer as a `dict`, validated on the client with a port of the server's own validator; a mismatch runs the inference again
 - `generate_text()`: plain text answers from the same agent
 - `inference()` / `text()`: the full typed response (`status` is `"success"` or `"error"`) without raising
+- `generate_object_async()`, `generate_text_async()` and `AsyncAgentRuntimeClient` for `asyncio` code
 - `AgentRuntimeError` with the server's error code, per-attempt details and inference id
 - Admin API: list and search inferences, read transcripts, download attachments, delete runs
 - Zero dependencies, Python 3.9+, `urllib` underneath; the HTTP layer is replaceable for tests
@@ -74,6 +75,27 @@ from agent_runtime_client import create_client
 client = create_client("http://localhost:10050")
 report = client.generate_object(messages, format)
 ```
+
+## Async
+
+Every function and client method has an `async` twin with the same arguments: `generate_object_async`, `generate_text_async`, `inference_async`, `text_async` and `AsyncAgentRuntimeClient`.
+
+```python
+import asyncio
+
+from agent_runtime_client import AsyncAgentRuntimeClient, generate_text_async
+
+async def main():
+    async with AsyncAgentRuntimeClient("http://localhost:10050") as client:
+        health, summary = await asyncio.gather(
+            client.health(),
+            generate_text_async([{"role": "user", "content": "Summarise notes.txt"}], files=[encode_file("notes.txt", notes)]),
+        )
+
+asyncio.run(main())
+```
+
+The request itself is still the blocking `urllib` call, awaited in a worker thread through `asyncio.to_thread`; the event loop keeps running while an inference takes its minutes. Two limits follow: each call in flight occupies a thread of the default executor, and cancelling the task does not abort the request, the thread finishes it in the background and the server keeps running the inference. `AsyncAgentRuntimeClient.sync` is the underlying synchronous client.
 
 ## Images
 
@@ -179,12 +201,14 @@ Standalone functions (create the client internally):
 | `generate_text(messages, **kw)` | `str` |
 | `inference(messages, format, **kw)` | `InferenceResponse` |
 | `text(messages, **kw)` | `TextResponse` |
+| `generate_object_async`, `generate_text_async`, `inference_async`, `text_async` | the same, awaitable |
 
 Client:
 
 | Method | Returns |
 |--------|---------|
 | `create_client(base_url=None, **options)` / `AgentRuntimeClient(...)` | options: `headers`, `timeout`, `validate_answer` (True), `max_attempts` (3), `transport` |
+| `create_async_client(...)` / `AsyncAgentRuntimeClient(...)` | the same methods as coroutines, usable as `async with` |
 | `generate_object(messages, format, *, files, model, instructions, headers, timeout)` | `dict` |
 | `generate_text(messages, *, ...)` | `str` |
 | `inference(...)` / `text(...)` | typed response |

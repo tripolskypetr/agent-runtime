@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from .async_client import AsyncAgentRuntimeClient
 from .client import AgentRuntimeClient, Transport
 from .models import FormatModel, InferenceResponse, RequestFile, RequestMessage, TextResponse
 
@@ -90,3 +91,80 @@ def text(
 ) -> TextResponse:
     """Same request as :func:`generate_text`, but returns the full response instead of raising."""
     return _client(base_url, headers, timeout, True, 1, transport).text(messages, files=files, model=model, instructions=instructions)
+
+
+# ------------------------------------------------------------------ async twins
+
+
+def _async_client(base_url: Optional[str], headers: Optional[Dict[str, str]], timeout: Optional[float], validate_answer: bool, max_attempts: int, transport: Optional[Transport]) -> AsyncAgentRuntimeClient:
+    return AsyncAgentRuntimeClient(base_url, headers=headers, timeout=timeout, validate_answer=validate_answer, max_attempts=max_attempts, transport=transport)
+
+
+async def generate_object_async(
+    messages: List[RequestMessage],
+    format: FormatModel,
+    *,
+    files: Optional[List[RequestFile]] = None,
+    model: Optional[str] = None,
+    instructions: Optional[str] = None,
+    base_url: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: Optional[float] = None,
+    validate_answer: bool = True,
+    max_attempts: int = 3,
+    transport: Optional[Transport] = None,
+) -> Dict[str, Any]:
+    """:func:`generate_object` for ``asyncio``: the same call awaited in a worker thread, see :class:`AsyncAgentRuntimeClient`."""
+    return await _async_client(base_url, headers, timeout, validate_answer, max_attempts, transport).generate_object(
+        messages, format, files=files, model=model, instructions=instructions
+    )
+
+
+async def inference_async(
+    messages: List[RequestMessage],
+    format: FormatModel,
+    *,
+    files: Optional[List[RequestFile]] = None,
+    model: Optional[str] = None,
+    instructions: Optional[str] = None,
+    base_url: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: Optional[float] = None,
+    validate_answer: bool = True,
+    max_attempts: int = 3,
+    transport: Optional[Transport] = None,
+) -> InferenceResponse:
+    """:func:`inference` for ``asyncio``: the full response instead of raising."""
+    return await _async_client(base_url, headers, timeout, validate_answer, max_attempts, transport).inference(
+        messages, format, files=files, model=model, instructions=instructions
+    )
+
+
+async def generate_text_async(
+    messages: List[RequestMessage],
+    *,
+    files: Optional[List[RequestFile]] = None,
+    model: Optional[str] = None,
+    instructions: Optional[str] = None,
+    base_url: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: Optional[float] = None,
+    transport: Optional[Transport] = None,
+) -> str:
+    """:func:`generate_text` for ``asyncio``."""
+    return await _async_client(base_url, headers, timeout, True, 1, transport).generate_text(messages, files=files, model=model, instructions=instructions)
+
+
+async def text_async(
+    messages: List[RequestMessage],
+    *,
+    files: Optional[List[RequestFile]] = None,
+    model: Optional[str] = None,
+    instructions: Optional[str] = None,
+    base_url: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: Optional[float] = None,
+    transport: Optional[Transport] = None,
+) -> TextResponse:
+    """:func:`text` for ``asyncio``: the full response instead of raising."""
+    return await _async_client(base_url, headers, timeout, True, 1, transport).text(messages, files=files, model=model, instructions=instructions)

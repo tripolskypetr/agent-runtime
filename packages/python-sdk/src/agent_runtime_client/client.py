@@ -47,7 +47,10 @@ def urllib_transport(method: str, url: str, headers: Dict[str, str], body: Optio
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, {key.lower(): value for key, value in response.headers.items()}, response.read()
     except urllib.error.HTTPError as error:
-        return error.code, {key.lower(): value for key, value in error.headers.items()}, error.read()
+        try:
+            return error.code, {key.lower(): value for key, value in error.headers.items()}, error.read()
+        finally:
+            error.close()
 
 
 class AgentRuntimeClient:

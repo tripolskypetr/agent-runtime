@@ -139,7 +139,7 @@ entry.position; // "long" | "short" | "wait"
 
 See the [Node SDK README](packages/node-sdk/README.md) for the full API, error handling and long-request setup.
 
-[packages/python-sdk](packages/python-sdk) ships `agent-runtime-client` for Python 3.9+ over the standard library: the same `generate_object()` / `generate_text()` pair, the admin API and a port of the answer validator with the same messages:
+[packages/python-sdk](packages/python-sdk) ships `agent-runtime-client` for Python 3.9+ over the standard library: the same `generate_object()` / `generate_text()` pair with `async` twins, the admin API and a port of the answer validator with the same messages:
 
 ```python
 from agent_runtime_client import generate_object
